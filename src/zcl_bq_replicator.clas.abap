@@ -47,8 +47,10 @@ CLASS zcl_bq_replicator DEFINITION
         iv_updmode  TYPE char1
         iv_records  TYPE i.
 
+    TYPES ty_log_id TYPE n LENGTH 20.
+
     METHODS generate_log_id
-      RETURNING VALUE(rv_log_id) TYPE n LENGTH 20.
+      RETURNING VALUE(rv_log_id) TYPE ty_log_id.
 
     METHODS send_in_batches
       IMPORTING

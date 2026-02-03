@@ -310,7 +310,7 @@ CLASS zcl_bq_odp_subscriber IMPLEMENTATION.
 
     IF rv_success = abap_true.
       UPDATE zbqtr_subsc
-        SET status = 'I'
+        SET status = 'I',
             last_delta_pointer = ''
         WHERE datasource = @mv_datasource.
       COMMIT WORK.
@@ -319,13 +319,12 @@ CLASS zcl_bq_odp_subscriber IMPLEMENTATION.
 
 
   METHOD subscription_exists.
+    " Check our tracking table instead of internal ODP table
     DATA: lv_count TYPE i.
 
     SELECT COUNT(*) INTO @lv_count
-      FROM odqsn
-      WHERE subscribertype = @c_subscriber_type
-        AND subscribername = @c_subscriber_name
-        AND odpname        = @mv_datasource.
+      FROM zbqtr_subsc
+      WHERE datasource = @mv_datasource.
 
     rv_exists = COND #( WHEN lv_count > 0 THEN abap_true ELSE abap_false ).
   ENDMETHOD.
