@@ -4,20 +4,20 @@ CLASS zcl_bq_odp_subscriber DEFINITION
   CREATE PUBLIC.
 
   PUBLIC SECTION.
-    CONSTANTS c_subscriber_type TYPE char10 VALUE 'BOBJ_DS'.
-    CONSTANTS c_subscriber_name TYPE char30 VALUE 'ZBQTR_SUBSCRIBER'.
-    CONSTANTS c_context_sapi TYPE char10 VALUE 'SAPI'.
+    CONSTANTS c_subscriber_type TYPE odq_subscriber_type VALUE 'BOBJ_DS'.
+    CONSTANTS c_subscriber_name TYPE odq_subscriber_id VALUE 'ZBQTR_SUBSCRIBER'.
+    CONSTANTS c_context_sapi TYPE rodps_context VALUE 'SAPI'.
 
     CONSTANTS:
-      c_mode_full     TYPE char1 VALUE 'F',
-      c_mode_delta    TYPE char1 VALUE 'D',
-      c_mode_init     TYPE char1 VALUE 'I',
-      c_mode_recovery TYPE char1 VALUE 'R',
-      c_mode_auto     TYPE char1 VALUE 'A'.
+      c_mode_full     TYPE rodps_repl_mode VALUE 'F',
+      c_mode_delta    TYPE rodps_repl_mode VALUE 'D',
+      c_mode_init     TYPE rodps_repl_mode VALUE 'I',
+      c_mode_recovery TYPE rodps_repl_mode VALUE 'R',
+      c_mode_auto     TYPE rodps_repl_mode VALUE 'A'.
 
     METHODS constructor
       IMPORTING
-        iv_datasource  TYPE char30
+        iv_datasource  TYPE rodps_odpname
         iv_mass_tr_key TYPE char20 OPTIONAL
         iv_struct_name TYPE char30 OPTIONAL.
 
@@ -47,10 +47,10 @@ CLASS zcl_bq_odp_subscriber DEFINITION
       RETURNING VALUE(rs_status) TYPE zbqtr_subsc.
 
     METHODS get_datasource
-      RETURNING VALUE(rv_datasource) TYPE char30.
+      RETURNING VALUE(rv_datasource) TYPE rodps_odpname.
 
     METHODS get_pointer
-      RETURNING VALUE(rv_pointer) TYPE char32.
+      RETURNING VALUE(rv_pointer) TYPE rodps_repl_pointer.
 
     METHODS get_mass_tr_key
       RETURNING VALUE(rv_mass_tr_key) TYPE char20.
@@ -59,16 +59,16 @@ CLASS zcl_bq_odp_subscriber DEFINITION
       RETURNING VALUE(rv_struct_name) TYPE char30.
 
   PRIVATE SECTION.
-    DATA mv_datasource TYPE char30.
+    DATA mv_datasource TYPE rodps_odpname.
     DATA mv_mass_tr_key TYPE char20.
     DATA mv_struct_name TYPE char30.
-    DATA mv_pointer TYPE char32.
-    DATA mv_process_id TYPE char30.
-    DATA mv_current_mode TYPE char1.
+    DATA mv_pointer TYPE rodps_repl_pointer.
+    DATA mv_process_id TYPE rodps_repl_process.
+    DATA mv_current_mode TYPE rodps_repl_mode.
 
     METHODS open_extraction
       IMPORTING
-        iv_mode TYPE char1
+        iv_mode TYPE rodps_repl_mode
       RAISING zcx_bq_replication_failed.
 
     METHODS fetch_and_process
@@ -87,7 +87,7 @@ CLASS zcl_bq_odp_subscriber DEFINITION
         iv_error   TYPE string OPTIONAL.
 
     METHODS generate_process_id
-      RETURNING VALUE(rv_id) TYPE char30.
+      RETURNING VALUE(rv_id) TYPE rodps_repl_process.
 
     METHODS record_failure
       IMPORTING
@@ -200,9 +200,9 @@ CLASS zcl_bq_odp_subscriber IMPLEMENTATION.
 
 
   METHOD open_extraction.
-    DATA: lt_return     TYPE TABLE OF bapiret2,
-          lt_selections TYPE TABLE OF rssdlrange,
-          lt_fields     TYPE TABLE OF fieldname.
+    DATA: lt_return     TYPE bapirettab,
+          lt_selections TYPE rodps_repl_t_selection,
+          lt_fields     TYPE rodps_repl_t_projection.
 
     mv_current_mode = iv_mode.
 
@@ -244,8 +244,8 @@ CLASS zcl_bq_odp_subscriber IMPLEMENTATION.
 
   METHOD fetch_and_process.
     DATA: lt_data       TYPE STANDARD TABLE OF char8000,
-          lt_return     TYPE TABLE OF bapiret2,
-          lv_no_more    TYPE abap_bool.
+          lt_return     TYPE bapirettab,
+          lv_no_more    TYPE odq_boolean.
 
     rv_records = 0.
 
@@ -291,7 +291,7 @@ CLASS zcl_bq_odp_subscriber IMPLEMENTATION.
 
 
   METHOD close_extraction.
-    DATA: lt_return TYPE TABLE OF bapiret2.
+    DATA: lt_return TYPE bapirettab.
 
     IF mv_pointer IS INITIAL.
       RETURN.
