@@ -3,9 +3,14 @@
  <asx:abap xmlns:asx="http://www.sap.com/abapxml" version="1.0">
   <asx:values>
    <SXCI>
-    <IMP_NAME>Z_SAPI_BQ_REPLICATION</IMP_NAME>
-    <EXIT_NAME>RSU5_SAPI_BADI</EXIT_NAME>
-    <IMP_CLASS>ZCL_IM_SAPI_BQ</IMP_CLASS>
+    <IMPLEMENTATION_DATA>
+     <IMP_NAME>Z_SAPI_BQ_REPLICATION</IMP_NAME>
+     <TEXT>BQ Toolkit Replication for S-API Extractors</TEXT>
+     <IMP_CLASS>ZCL_IM_SAPI_BQ</IMP_CLASS>
+     <EXIT_NAME>RSU5_SAPI_BADI</EXIT_NAME>
+     <INTER_NAME>IF_EX_RSU5_SAPI_BADI</INTER_NAME>
+     <ACTIVE>X</ACTIVE>
+    </IMPLEMENTATION_DATA>
    </SXCI>
   </asx:values>
  </asx:abap>
