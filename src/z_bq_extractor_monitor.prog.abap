@@ -215,7 +215,7 @@ CLASS lcl_monitor IMPLEMENTATION.
 
 
   METHOD show_pending_deltas.
-    " Query ODQMON for pending (unconfirmed) deltas
+    " Show pending deltas based on subscription status
     DATA: lv_filter TYPE char30.
 
     lv_filter = iv_datasource_filter.
@@ -224,21 +224,19 @@ CLASS lcl_monitor IMPLEMENTATION.
     WRITE: / TEXT-012.
     ULINE.
 
-    " Query ODP subscription table for our subscriber
-    SELECT odpname, COUNT(*) AS count
-      FROM odqrequesth
-      WHERE subscribertype = @zcl_bq_odp_subscriber=>c_subscriber_type
-        AND subscribername = @zcl_bq_odp_subscriber=>c_subscriber_name
-        AND odpname LIKE @lv_filter
-        AND status <> 'C'  " Not confirmed
-      GROUP BY odpname
+    " Query our subscription tracking table for error status
+    SELECT datasource, status, consecutive_failures, last_error
+      FROM zbqtr_subsc
+      WHERE datasource LIKE @lv_filter
+        AND status = 'E'  " Error status indicates pending retry
       INTO TABLE @DATA(lt_pending).
 
-    IF lt_pending IS INITIAL.
+    IF sy-subrc <> 0 OR lines( lt_pending ) = 0.
       WRITE: / 'No pending deltas found.'.
     ELSE.
-      LOOP AT lt_pending INTO DATA(ls_pending).
-        WRITE: / |Datasource: { ls_pending-odpname } - Pending requests: { ls_pending-count }|.
+      DATA: ls_pend LIKE LINE OF lt_pending.
+      LOOP AT lt_pending INTO ls_pend.
+        WRITE: / |Datasource: { ls_pend-datasource } - Failures: { ls_pend-consecutive_failures }|.
       ENDLOOP.
     ENDIF.
 
@@ -296,12 +294,20 @@ CLASS lcl_monitor IMPLEMENTATION.
     DATA: lo_alv    TYPE REF TO cl_salv_table,
           lx_error  TYPE REF TO cx_salv_msg.
 
+    " Copy to local table (factory needs CHANGING parameter)
+    DATA: lt_data TYPE REF TO data.
+    FIELD-SYMBOLS: <lt_data> TYPE STANDARD TABLE.
+
+    CREATE DATA lt_data LIKE it_data.
+    ASSIGN lt_data->* TO <lt_data>.
+    <lt_data> = it_data.
+
     TRY.
         cl_salv_table=>factory(
           IMPORTING
             r_salv_table = lo_alv
           CHANGING
-            t_table      = it_data ).
+            t_table      = <lt_data> ).
 
         " Set title
         lo_alv->get_display_settings( )->set_list_header( CONV #( iv_title ) ).
