@@ -24,43 +24,37 @@
     <item>
      <ID>S</ID>
      <KEY>P_DS</KEY>
-     <ENTRY>        Datasource filter</ENTRY>
+     <ENTRY>        Datasource name</ENTRY>
      <LENGTH>24</LENGTH>
     </item>
     <item>
      <ID>S</ID>
      <KEY>P_MODE</KEY>
-     <ENTRY>        Extraction mode (D/F/I/R)</ENTRY>
-     <LENGTH>32</LENGTH>
+     <ENTRY>        Extraction mode (D/F/I/R/A)</ENTRY>
+     <LENGTH>34</LENGTH>
     </item>
     <item>
      <ID>S</ID>
-     <KEY>P_PARA</KEY>
-     <ENTRY>        Enable parallel processing</ENTRY>
-     <LENGTH>32</LENGTH>
+     <KEY>P_MTKEY</KEY>
+     <ENTRY>        Mass Transfer Key</ENTRY>
+     <LENGTH>26</LENGTH>
     </item>
     <item>
      <ID>S</ID>
-     <KEY>P_PGRP</KEY>
-     <ENTRY>        Server group</ENTRY>
-     <LENGTH>20</LENGTH>
+     <KEY>P_STRUCT</KEY>
+     <ENTRY>        Structure name (optional)</ENTRY>
+     <LENGTH>32</LENGTH>
     </item>
     <item>
      <ID>S</ID>
      <KEY>P_TEST</KEY>
      <ENTRY>        Test mode (no BQ write)</ENTRY>
-     <LENGTH>28</LENGTH>
+     <LENGTH>32</LENGTH>
     </item>
     <item>
      <ID>I</ID>
      <KEY>001</KEY>
      <ENTRY>Extraction Settings</ENTRY>
-     <LENGTH>19</LENGTH>
-    </item>
-    <item>
-     <ID>I</ID>
-     <KEY>002</KEY>
-     <ENTRY>Performance Options</ENTRY>
      <LENGTH>19</LENGTH>
     </item>
     <item>
