@@ -4,7 +4,7 @@ CLASS zcl_bq_odp_subscriber DEFINITION
   CREATE PUBLIC.
 
   PUBLIC SECTION.
-    CONSTANTS c_subscriber_type TYPE char10 VALUE 'ZBQTR'.
+    CONSTANTS c_subscriber_type TYPE char10 VALUE 'BOBJ_DS'.
     CONSTANTS c_subscriber_name TYPE char30 VALUE 'ZBQTR_SUBSCRIBER'.
     CONSTANTS c_context_sapi TYPE char10 VALUE 'SAPI'.
 
