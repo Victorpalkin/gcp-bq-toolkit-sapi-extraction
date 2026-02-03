@@ -161,27 +161,31 @@ The solution implements fail-safe extraction:
 
 ```
 bqtoolkitextractor/
+├── .abapgit.xml
 ├── README.md
 ├── docs/
 │   ├── INSTALL.md
 │   ├── USER_GUIDE.md
 │   └── TECHNICAL.md
 └── src/
-    ├── tables/
-    │   ├── zbqtr_config.tabl.xml
-    │   ├── zbqtr_log.tabl.xml
-    │   └── zbqtr_subsc.tabl.xml
-    ├── classes/
-    │   ├── zcx_bq_replication_failed.clas.abap
-    │   ├── zcl_bq_replicator.clas.abap
-    │   └── zcl_bq_odp_subscriber.clas.abap
-    ├── badi/
-    │   ├── zcl_im_sapi_bq.clas.abap
-    │   └── z_sapi_bq_replication.enho.xml
-    ├── programs/
-    │   ├── z_bq_extractor_run.prog.abap
-    │   └── z_bq_extractor_monitor.prog.abap
-    └── zbqtr.msag.xml
+    ├── package.devc.xml
+    ├── zbqtr.msag.xml
+    ├── zbqtr_config.tabl.xml
+    ├── zbqtr_log.tabl.xml
+    ├── zbqtr_subsc.tabl.xml
+    ├── zcx_bq_replication_failed.clas.abap
+    ├── zcx_bq_replication_failed.clas.xml
+    ├── zcl_bq_replicator.clas.abap
+    ├── zcl_bq_replicator.clas.xml
+    ├── zcl_bq_odp_subscriber.clas.abap
+    ├── zcl_bq_odp_subscriber.clas.xml
+    ├── zcl_im_sapi_bq.clas.abap
+    ├── zcl_im_sapi_bq.clas.xml
+    ├── z_sapi_bq_replication.enho.xml
+    ├── z_bq_extractor_run.prog.abap
+    ├── z_bq_extractor_run.prog.xml
+    ├── z_bq_extractor_monitor.prog.abap
+    └── z_bq_extractor_monitor.prog.xml
 ```
 
 ## References
