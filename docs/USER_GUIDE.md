@@ -18,6 +18,134 @@ The solution extracts data from SAP S-API extractors (Logistics 2LIS_* and FI/CO
 
 ---
 
+## Quick Start: Scheduling Full + Delta Extraction Jobs
+
+This section shows how to set up automated extraction for a list of datasources: an initial full load followed by recurring delta extractions.
+
+### Prerequisites
+
+1. Datasources configured in ZBQTR_CONFIG (SM30)
+2. Mass Transfer Keys created in `/GOOG/BQTR_SETTINGS`
+3. BigQuery tables created for target datasets
+
+### Step 1: Initialize Subscriptions (One-Time)
+
+Before extracting data, initialize ODP subscriptions for your datasources.
+
+**Option A: Initialize All Active Datasources**
+```
+Transaction: SA38 or SE38
+Program: Z_BQ_EXTRACTOR_RUN
+Parameters:
+  - p_ds   = *
+  - p_mode = I
+```
+
+**Option B: Initialize Specific Datasources**
+
+Run multiple times with each datasource name:
+```
+p_ds   = 2LIS_11_VAHDR
+p_mode = I
+```
+
+### Step 2: Schedule Full Load Job (One-Time)
+
+Create a one-time background job for the initial full load.
+
+1. **Transaction SM36** → Define Background Job
+2. Job Name: `Z_BQ_FULL_LOAD_YYYYMMDD`
+3. Click **Step** → Create step:
+   - Program: `Z_BQ_EXTRACTOR_RUN`
+   - Variant: Create new or use existing
+4. **Create Variant** (if needed):
+   | Parameter | Value | Description |
+   |-----------|-------|-------------|
+   | p_ds | * | All active datasources (or specific name) |
+   | p_mode | F | Full extraction |
+   | p_test | (blank) | Live mode |
+   | p_para | X | Parallel processing (recommended) |
+5. Click **Start Condition** → Immediate or schedule for off-peak hours
+6. **Save** the job
+
+**For Multiple Specific Datasources:**
+
+Create a variant for each datasource or run with `p_ds = *` to process all active entries in ZBQTR_CONFIG.
+
+### Step 3: Schedule Recurring Delta Job
+
+Create a periodic job for ongoing delta extractions.
+
+1. **Transaction SM36** → Define Background Job
+2. Job Name: `Z_BQ_DELTA_EXTRACTION`
+3. Click **Step** → Create step:
+   - Program: `Z_BQ_EXTRACTOR_RUN`
+   - Variant: Create or select delta variant
+4. **Create Variant**:
+   | Parameter | Value | Description |
+   |-----------|-------|-------------|
+   | p_ds | * | All active datasources |
+   | p_mode | D | Delta extraction |
+   | p_test | (blank) | Live mode |
+   | p_para | X | Parallel processing |
+5. Click **Start Condition** → **Date/Time** → Set start time
+6. Check **Periodic Job** → Click **Period Values**:
+   - Select **Minutes** → Enter: `15` (or desired interval)
+   - Or select **Hourly** for larger intervals
+7. **Save** the job
+
+### Step 4: Verify Job Scheduling
+
+1. **SM37** → Job Overview
+   - Job name: `Z_BQ_*`
+   - Status: Scheduled / Released
+2. Confirm jobs appear with correct schedule
+
+### Example: Complete Setup for Sales Datasources
+
+```
+Datasources: 2LIS_11_VAHDR, 2LIS_11_VAITM, 2LIS_12_VCHDR
+
+Step 1 - Initialize (run once for each):
+  Program: Z_BQ_EXTRACTOR_RUN
+  Variant INIT_SALES:
+    p_ds   = 2LIS_11_VAHDR
+    p_mode = I
+  (repeat for other datasources or use p_ds = * if all are in ZBQTR_CONFIG)
+
+Step 2 - Full Load Job (one-time):
+  Job: Z_BQ_FULL_SALES_20260203
+  Variant FULL_SALES:
+    p_ds   = *
+    p_mode = F
+    p_para = X
+  Start: Immediate or scheduled
+
+Step 3 - Delta Job (recurring):
+  Job: Z_BQ_DELTA_ALL
+  Variant DELTA_ALL:
+    p_ds   = *
+    p_mode = D
+    p_para = X
+  Schedule: Every 15 minutes
+```
+
+### Monitoring After Setup
+
+1. **SM37**: Check job execution status
+2. **Z_BQ_EXTRACTOR_MONITOR**: View extraction results and errors
+3. **ODQMON**: Verify ODP subscriptions and delta queue status
+4. **BigQuery Console**: Confirm data arriving in target tables
+
+### Tips
+
+- **Off-Peak Full Loads**: Schedule full loads during maintenance windows
+- **Stagger Large Extractions**: For many datasources, split into multiple jobs
+- **Parallel Processing**: Enable `p_para = X` for faster extraction
+- **Test First**: Run with `p_test = X` to validate before live extraction
+
+---
+
 ## Adding New Extractors
 
 ### Step 1: Identify the S-API Datasource
