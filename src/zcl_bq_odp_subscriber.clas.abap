@@ -243,9 +243,10 @@ CLASS zcl_bq_odp_subscriber IMPLEMENTATION.
 
 
   METHOD fetch_and_process.
-    DATA: lt_data       TYPE STANDARD TABLE OF char8000,
+    DATA: lt_data       TYPE rodps_repl_t_xdata,
           lt_return     TYPE bapirettab,
-          lv_no_more    TYPE odq_boolean.
+          lv_no_more    TYPE odq_boolean,
+          lv_maxsize    TYPE rodps_repl_size VALUE '52428800'.
 
     rv_records = 0.
 
@@ -255,7 +256,7 @@ CLASS zcl_bq_odp_subscriber IMPLEMENTATION.
       CALL FUNCTION 'RODPS_REPL_ODP_FETCH'
         EXPORTING
           i_pointer        = mv_pointer
-          i_maxpackagesize = 52428800
+          i_maxpackagesize = lv_maxsize
         IMPORTING
           e_no_more_data   = lv_no_more
         TABLES
