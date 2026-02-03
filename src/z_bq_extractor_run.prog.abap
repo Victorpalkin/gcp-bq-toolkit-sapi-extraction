@@ -142,7 +142,7 @@ CLASS lcl_extractor IMPLEMENTATION.
     ENDIF.
 
     WRITE: / TEXT-010.
-    WRITE: / |Mode: { iv_mode } | Datasources: { lines( lt_config ) }|.
+    WRITE: / |Mode: { iv_mode } - Datasources: { lines( lt_config ) }|.
     ULINE.
 
     IF mv_test_mode = abap_true.

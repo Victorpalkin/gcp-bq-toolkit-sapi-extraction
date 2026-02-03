@@ -93,6 +93,11 @@ DATA: gt_log TYPE TABLE OF ty_log_display,
 
 
 *----------------------------------------------------------------------*
+* Types
+*----------------------------------------------------------------------*
+TYPES: ty_date_range TYPE RANGE OF datum.
+
+*----------------------------------------------------------------------*
 * Local Classes
 *----------------------------------------------------------------------*
 CLASS lcl_monitor DEFINITION.
@@ -100,7 +105,7 @@ CLASS lcl_monitor DEFINITION.
     METHODS show_log
       IMPORTING
         iv_datasource_filter TYPE char30
-        it_date_range        TYPE RANGE OF sy-datum
+        it_date_range        TYPE ty_date_range
         iv_status_filter     TYPE char1
         iv_max_rows          TYPE i.
 
