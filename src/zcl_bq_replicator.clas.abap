@@ -194,7 +194,7 @@ CLASS zcl_bq_replicator IMPLEMENTATION.
           iv_datasource = mv_datasource
           iv_error_code = rs_result-error_code
           iv_error_text = rs_result-error_message
-          iv_request_id = iv_request_id.
+          iv_request_id = CONV #( iv_request_id ).
     ENDIF.
   ENDMETHOD.
 
