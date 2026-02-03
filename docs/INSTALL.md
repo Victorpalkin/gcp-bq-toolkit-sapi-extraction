@@ -129,7 +129,7 @@ Use this method for production deployments or systems without abapGit.
    - Tables: `ZBQTR_CONFIG`, `ZBQTR_LOG`, `ZBQTR_SUBSC`
    - Classes: `ZCX_BQ_REPLICATION_FAILED`, `ZCL_BQ_REPLICATOR`, `ZCL_BQ_ODP_SUBSCRIBER`, `ZCL_IM_SAPI_BQ`
    - Programs: `Z_BQ_EXTRACTOR_RUN`, `Z_BQ_EXTRACTOR_MONITOR`
-   - BAdI Implementation: `Z_SAPI_BQ_REPLICATION`
+   - BAdI Implementation: `Z_BQTR_SAPI`
    - Message Class: `ZBQTR`
 
 ### Step B2: Proceed to Configuration
@@ -177,7 +177,7 @@ For each datasource you want to replicate, create a Mass Transfer Key:
 ### Step 4: Activate BAdI Implementation
 
 1. Navigate to transaction **SE19**
-2. Open BAdI Implementation `Z_SAPI_BQ_REPLICATION`
+2. Open BAdI Implementation `Z_BQTR_SAPI`
 3. Verify it is set to **Active**
 4. Check that the implementing class `ZCL_IM_SAPI_BQ` is correct
 

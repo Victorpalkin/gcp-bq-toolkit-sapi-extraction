@@ -4,7 +4,7 @@
   <asx:values>
    <SXCI>
     <IMPLEMENTATION_DATA>
-     <IMP_NAME>Z_SAPI_BQ_REPLICATION</IMP_NAME>
+     <IMP_NAME>Z_BQTR_SAPI</IMP_NAME>
      <TEXT>BQ Toolkit Replication for S-API Extractors</TEXT>
      <IMP_CLASS>ZCL_IM_SAPI_BQ</IMP_CLASS>
      <EXIT_NAME>RSU5_SAPI_BADI</EXIT_NAME>

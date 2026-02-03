@@ -208,7 +208,7 @@ bqtoolkitextractor/
     ├── zcl_bq_odp_subscriber.clas.xml
     ├── zcl_im_sapi_bq.clas.abap
     ├── zcl_im_sapi_bq.clas.xml
-    ├── z_sapi_bq_replication.enho.xml
+    ├── z_bqtr_sapi.sxci.xml
     ├── z_bq_extractor_run.prog.abap
     ├── z_bq_extractor_run.prog.xml
     ├── z_bq_extractor_monitor.prog.abap
