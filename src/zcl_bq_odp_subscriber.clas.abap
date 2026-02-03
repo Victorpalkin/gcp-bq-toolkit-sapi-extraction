@@ -152,9 +152,10 @@ CLASS zcl_bq_odp_subscriber IMPLEMENTATION.
 
     TRY.
         open_extraction( c_mode_full ).
-        rv_records = fetch_and_process( ).
+        " BAdI handles data during OPEN - no FETCH needed
         close_extraction( ).
-        record_success( rv_records ).
+        record_success( 0 ).  " Record count comes from BAdI/logs
+        rv_records = 0.
 
       CATCH zcx_bq_replication_failed INTO DATA(lx_error).
         TRY.
@@ -172,9 +173,10 @@ CLASS zcl_bq_odp_subscriber IMPLEMENTATION.
 
     TRY.
         open_extraction( c_mode_delta ).
-        rv_records = fetch_and_process( ).
+        " BAdI handles data during OPEN - no FETCH needed
         close_extraction( ).
-        record_success( rv_records ).
+        record_success( 0 ).  " Record count comes from BAdI/logs
+        rv_records = 0.
 
       CATCH zcx_bq_replication_failed INTO DATA(lx_error).
         TRY.
@@ -243,51 +245,9 @@ CLASS zcl_bq_odp_subscriber IMPLEMENTATION.
 
 
   METHOD fetch_and_process.
-    DATA: lt_data       TYPE rodps_repl_t_xdata,
-          lt_return     TYPE bapirettab,
-          lv_no_more    TYPE odq_boolean,
-          lv_maxsize    TYPE rodps_repl_size VALUE '52428800'.
-
+    " No longer needed - BAdI handles data during OPEN phase
+    " Kept for interface compatibility
     rv_records = 0.
-
-    DO.
-      CLEAR: lt_data, lt_return, lv_no_more.
-
-      CALL FUNCTION 'RODPS_REPL_ODP_FETCH'
-        EXPORTING
-          i_pointer        = mv_pointer
-          i_maxpackagesize = lv_maxsize
-        IMPORTING
-          e_no_more_data   = lv_no_more
-        TABLES
-          et_data          = lt_data
-          et_return        = lt_return
-        EXCEPTIONS
-          OTHERS           = 1.
-
-      IF sy-subrc <> 0.
-        RAISE EXCEPTION TYPE zcx_bq_replication_failed
-          EXPORTING
-            iv_datasource = mv_datasource
-            iv_error_text = 'Failed to fetch ODP data package'
-            iv_request_id = mv_pointer.
-      ENDIF.
-
-      LOOP AT lt_return INTO DATA(ls_return) WHERE type CA 'EAX'.
-        RAISE EXCEPTION TYPE zcx_bq_replication_failed
-          EXPORTING
-            iv_datasource = mv_datasource
-            iv_error_code = CONV i( ls_return-number )
-            iv_error_text = CONV string( ls_return-message )
-            iv_request_id = mv_pointer.
-      ENDLOOP.
-
-      rv_records = rv_records + lines( lt_data ).
-
-      IF lv_no_more = abap_true.
-        EXIT.
-      ENDIF.
-    ENDDO.
   ENDMETHOD.
 
 

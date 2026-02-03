@@ -95,6 +95,7 @@ CLASS lcl_extractor DEFINITION.
     DATA mv_test_mode TYPE abap_bool.
     DATA mv_mass_tr_key TYPE char20.
     DATA mv_struct_name TYPE char30.
+    DATA mv_start_timestamp TYPE timestampl.
 
     "! Check BigQuery connectivity before extraction
     METHODS check_bq_connection
@@ -113,6 +114,11 @@ CLASS lcl_extractor DEFINITION.
       IMPORTING
         iv_datasource TYPE char30.
 
+    "! Display replication log entries from ZBQTR_LOG
+    METHODS display_log_entries
+      IMPORTING
+        iv_datasource TYPE char30.
+
 ENDCLASS.
 
 
@@ -126,6 +132,8 @@ CLASS lcl_extractor IMPLEMENTATION.
 
 
   METHOD run.
+    GET TIME STAMP FIELD mv_start_timestamp.
+
     WRITE: / TEXT-010.
     WRITE: / |Datasource: { iv_datasource } - Mode: { iv_mode }|.
     ULINE.
@@ -165,6 +173,9 @@ CLASS lcl_extractor IMPLEMENTATION.
     ELSE.
       WRITE: / |Failed: { ls_result-message }|.
     ENDIF.
+
+    " Display log entries from BAdI
+    display_log_entries( iv_datasource ).
   ENDMETHOD.
 
 
@@ -274,6 +285,41 @@ CLASS lcl_extractor IMPLEMENTATION.
 
     MODIFY zbqtr_config FROM ls_config.
     COMMIT WORK AND WAIT.
+  ENDMETHOD.
+
+
+  METHOD display_log_entries.
+    DATA: lt_log TYPE STANDARD TABLE OF zbqtr_log.
+
+    " Get log entries for this datasource from current run
+    SELECT * FROM zbqtr_log
+      WHERE datasource = @iv_datasource
+        AND timestamp >= @mv_start_timestamp
+      ORDER BY timestamp DESCENDING
+      INTO TABLE @lt_log.
+
+    IF lt_log IS NOT INITIAL.
+      ULINE.
+      WRITE: / 'Replication Log (from BAdI):'.
+      WRITE: / '----------------------------'.
+
+      DATA(lv_total_records) = 0.
+
+      LOOP AT lt_log INTO DATA(ls_log).
+        WRITE: / 'Timestamp:', ls_log-timestamp(14),
+                 'Records:', ls_log-records_replicated,
+                 'Status:', ls_log-status.
+        IF ls_log-error_message IS NOT INITIAL.
+          WRITE: / '  Error:', ls_log-error_message.
+        ENDIF.
+        lv_total_records = lv_total_records + ls_log-records_replicated.
+      ENDLOOP.
+
+      ULINE.
+      WRITE: / 'Total records replicated:', lv_total_records.
+    ELSE.
+      WRITE: / 'No log entries found (BAdI may not have been triggered)'.
+    ENDIF.
   ENDMETHOD.
 
 
