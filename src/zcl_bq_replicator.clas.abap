@@ -16,7 +16,9 @@ CLASS zcl_bq_replicator DEFINITION
 
     METHODS constructor
       IMPORTING
-        iv_datasource TYPE char30
+        iv_datasource  TYPE char30
+        iv_mass_tr_key TYPE char20 OPTIONAL
+        iv_struct_name TYPE char30 OPTIONAL
       RAISING
         zcx_bq_replication_failed.
 
@@ -78,15 +80,30 @@ CLASS zcl_bq_replicator IMPLEMENTATION.
   METHOD constructor.
     mv_datasource = iv_datasource.
 
+    " Try to get config from table (populated during init)
     SELECT SINGLE * FROM zbqtr_config
       WHERE datasource = @iv_datasource
       INTO @ms_config.
 
     IF sy-subrc <> 0.
-      RAISE EXCEPTION TYPE zcx_bq_replication_failed
-        EXPORTING
-          iv_datasource = iv_datasource
-          iv_error_text = |Configuration not found for datasource { iv_datasource }|.
+      " Not in config - use provided parameters (first-time init or direct call)
+      IF iv_mass_tr_key IS INITIAL.
+        RAISE EXCEPTION TYPE zcx_bq_replication_failed
+          EXPORTING
+            iv_datasource = iv_datasource
+            iv_error_text = 'Mass transfer key required (datasource not found in ZBQTR_CONFIG)'.
+      ENDIF.
+      ms_config-datasource = iv_datasource.
+      ms_config-mass_tr_key = iv_mass_tr_key.
+      ms_config-struct_name = iv_struct_name.
+    ELSE.
+      " Config found - override with provided parameters if supplied
+      IF iv_mass_tr_key IS NOT INITIAL.
+        ms_config-mass_tr_key = iv_mass_tr_key.
+      ENDIF.
+      IF iv_struct_name IS NOT INITIAL.
+        ms_config-struct_name = iv_struct_name.
+      ENDIF.
     ENDIF.
 
     IF ms_config-mass_tr_key IS INITIAL.

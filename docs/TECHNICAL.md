@@ -18,8 +18,8 @@ This document provides detailed technical information about the solution archite
 │       ▼                                                                     │
 │  ┌────────────────────────────────────────────────────────────────────┐    │
 │  │  Z_BQ_EXTRACTOR_RUN (Main Program)                                 │    │
-│  │  - Reads ZBQTR_CONFIG for enabled extractors                       │    │
-│  │  - Loops through each datasource                                   │    │
+│  │  - Accepts p_ds (datasource) and p_mtkey (mass transfer key)      │    │
+│  │  - Auto-populates ZBQTR_CONFIG during initialization               │    │
 │  │  - Calls ODP API to trigger extraction                             │    │
 │  └────────────────────────────────────────────────────────────────────┘    │
 │       │                                                                     │
@@ -37,6 +37,8 @@ This document provides detailed technical information about the solution archite
 │                       │  RSU5_SAPI_BADI     │───────────────┘               │
 │                       │  ZCL_IM_SAPI_BQ     │                               │
 │                       │  (DATA_TRANSFORM)   │                               │
+│                       │  - Checks ZBQTR_CONFIG                              │
+│                       │  - Verifies subscriber identity                     │
 │                       └─────────────────────┘                               │
 │                                │                                            │
 │                                │ Calls BQ Toolkit                           │
@@ -44,8 +46,9 @@ This document provides detailed technical information about the solution archite
 │                       ┌─────────────────────┐                               │
 │                       │  ZCL_BQ_REPLICATOR  │                               │
 │                       │  Wrapper Class      │                               │
-│                       │  - Error handling   │                               │
-│                       │  - Logging          │                               │
+│                       │  - Accepts mass_tr_key                              │
+│                       │  - Fallback to config                               │
+│                       │  - Error handling                                   │
 │                       └─────────────────────┘                               │
 │                                │                                            │
 │                                │ /GOOG/CL_BQTR_DATA_LOAD->REPLICATE_DATA   │
@@ -62,11 +65,70 @@ This document provides detailed technical information about the solution archite
 
 ---
 
+## Key Design Decisions
+
+### Parameter-Driven Configuration
+
+The solution uses input parameters instead of manual config table maintenance:
+
+| Parameter | Purpose |
+|-----------|---------|
+| p_ds | Exact datasource name (no wildcards) |
+| p_mtkey | BQ Toolkit Mass Transfer Key |
+| p_struct | Optional DDIC structure name |
+
+This approach:
+- Ensures each datasource has explicit configuration
+- Eliminates manual SM30 maintenance
+- Ties extraction to specific BQ Toolkit settings
+
+### Auto-Population of ZBQTR_CONFIG
+
+During initialization (mode = I), the solution automatically populates ZBQTR_CONFIG:
+
+```abap
+" Auto-register in ZBQTR_CONFIG
+DATA(ls_config) = VALUE zbqtr_config(
+  datasource       = iv_datasource
+  mass_tr_key      = mv_mass_tr_key
+  struct_name      = mv_struct_name
+  subscriber_type  = zcl_bq_odp_subscriber=>c_subscriber_type
+  subscriber_name  = zcl_bq_odp_subscriber=>c_subscriber_name
+  init_date        = sy-datum
+  init_time        = sy-uzeit
+  init_by          = sy-uname
+).
+MODIFY zbqtr_config FROM ls_config.
+```
+
+### BAdI Subscriber Verification
+
+The BAdI implementation checks that extractions come from our initialized subscriptions:
+
+```abap
+" Check if datasource was initialized by us
+SELECT SINGLE * FROM zbqtr_config
+  WHERE datasource = @lv_datasource
+  INTO @DATA(ls_config).
+
+IF sy-subrc <> 0.
+  RETURN.  " Not our datasource
+ENDIF.
+
+" Verify subscriber identity
+IF ls_config-subscriber_type <> zcl_bq_odp_subscriber=>c_subscriber_type OR
+   ls_config-subscriber_name <> zcl_bq_odp_subscriber=>c_subscriber_name.
+  RETURN.  " Not our subscription
+ENDIF.
+```
+
+---
+
 ## Database Objects
 
 ### ZBQTR_CONFIG
 
-Configuration table for datasources.
+Configuration table auto-populated during initialization.
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -74,16 +136,15 @@ Configuration table for datasources.
 | DATASOURCE | CHAR(30) | S-API datasource name (key) |
 | MASS_TR_KEY | CHAR(20) | BQ Toolkit mass transfer key |
 | STRUCT_NAME | CHAR(30) | DDIC structure name |
-| BQ_DATASET | CHAR(100) | Target BigQuery dataset |
-| BQ_TABLE | CHAR(100) | Target BigQuery table |
-| ACTIVE | CHAR(1) | X = enabled |
-| FULL_ONLY | CHAR(1) | X = skip delta extractions |
+| SUBSCRIBER_TYPE | CHAR(10) | ODP subscriber type (ZBQTR) |
+| SUBSCRIBER_NAME | CHAR(30) | ODP subscriber name |
 | BATCH_SIZE | INT4 | Max records per API call (0 = unlimited) |
-| PARALLEL_GROUP | CHAR(10) | Server group for parallel processing |
-| CREATED_BY | UNAME | Created by user |
-| CREATED_ON | DATS | Creation date |
-| CHANGED_BY | UNAME | Changed by user |
-| CHANGED_ON | DATS | Change date |
+| FULL_ONLY | CHAR(1) | X = skip delta extractions |
+| INIT_DATE | DATS | Initialization date |
+| INIT_TIME | TIMS | Initialization time |
+| INIT_BY | UNAME | Initialized by user |
+
+**Note**: This table is auto-populated and should not be manually maintained.
 
 ### ZBQTR_LOG
 
@@ -157,16 +218,6 @@ CLASS zcx_bq_replication_failed DEFINITION
 ENDCLASS.
 ```
 
-**Message IDs**:
-| ID | Description |
-|----|-------------|
-| bq_api_error | BigQuery API call failed |
-| odp_open_error | ODP OPEN function failed |
-| odp_fetch_error | ODP FETCH function failed |
-| odp_close_error | ODP CLOSE function failed |
-| config_not_found | Datasource not in ZBQTR_CONFIG |
-| bq_connection_error | Cannot connect to BigQuery |
-
 ### ZCL_BQ_REPLICATOR
 
 Wrapper for BQ Toolkit data replication.
@@ -185,7 +236,10 @@ CLASS zcl_bq_replicator DEFINITION.
            END OF ty_result.
 
     METHODS constructor
-      IMPORTING iv_datasource TYPE char30
+      IMPORTING
+        iv_datasource  TYPE char30
+        iv_mass_tr_key TYPE char20 OPTIONAL
+        iv_struct_name TYPE char30 OPTIONAL
       RAISING zcx_bq_replication_failed.
 
     METHODS replicate
@@ -203,12 +257,29 @@ CLASS zcl_bq_replicator DEFINITION.
 ENDCLASS.
 ```
 
-**Key Behaviors**:
-- Loads configuration from ZBQTR_CONFIG on construction
-- Creates BQ Toolkit instance (/GOOG/CL_BQTR_DATA_LOAD)
-- Supports batch processing via BATCH_SIZE config
-- Logs all operations to ZBQTR_LOG
-- Raises exception on any failure (fail-safe behavior)
+**Constructor Logic**:
+
+```abap
+" Try to get config from table (populated during init)
+SELECT SINGLE * FROM zbqtr_config
+  WHERE datasource = @iv_datasource
+  INTO @ms_config.
+
+IF sy-subrc <> 0.
+  " Not in config - use provided parameters
+  IF iv_mass_tr_key IS INITIAL.
+    RAISE EXCEPTION TYPE zcx_bq_replication_failed
+      EXPORTING iv_error_text = 'Mass transfer key required'.
+  ENDIF.
+  ms_config-mass_tr_key = iv_mass_tr_key.
+  ms_config-struct_name = iv_struct_name.
+ELSE.
+  " Config found - override with provided parameters if supplied
+  IF iv_mass_tr_key IS NOT INITIAL.
+    ms_config-mass_tr_key = iv_mass_tr_key.
+  ENDIF.
+ENDIF.
+```
 
 ### ZCL_BQ_ODP_SUBSCRIBER
 
@@ -224,10 +295,14 @@ CLASS zcl_bq_odp_subscriber DEFINITION.
       c_mode_full       TYPE char1 VALUE 'F',
       c_mode_delta      TYPE char1 VALUE 'D',
       c_mode_init       TYPE char1 VALUE 'I',
-      c_mode_recovery   TYPE char1 VALUE 'R'.
+      c_mode_recovery   TYPE char1 VALUE 'R',
+      c_mode_auto       TYPE char1 VALUE 'A'.
 
     METHODS constructor
-      IMPORTING iv_datasource TYPE char30.
+      IMPORTING
+        iv_datasource  TYPE char30
+        iv_mass_tr_key TYPE char20 OPTIONAL
+        iv_struct_name TYPE char30 OPTIONAL.
 
     METHODS initialize_subscription
       RETURNING VALUE(rv_success) TYPE abap_bool
@@ -241,43 +316,22 @@ CLASS zcl_bq_odp_subscriber DEFINITION.
       RETURNING VALUE(rv_records) TYPE i
       RAISING zcx_bq_replication_failed.
 
+    METHODS run_auto
+      RETURNING VALUE(rv_records) TYPE i
+      RAISING zcx_bq_replication_failed.
+
     METHODS reset_subscription
       RETURNING VALUE(rv_success) TYPE abap_bool.
 
     METHODS subscription_exists
       RETURNING VALUE(rv_exists) TYPE abap_bool.
+
+    METHODS get_mass_tr_key
+      RETURNING VALUE(rv_mass_tr_key) TYPE char20.
+
+    METHODS get_struct_name
+      RETURNING VALUE(rv_struct_name) TYPE char30.
 ENDCLASS.
-```
-
-**ODP API Usage**:
-```abap
-" Open extraction
-CALL FUNCTION 'RODPS_REPL_ODP_OPEN'
-  EXPORTING
-    i_subscriber_type    = 'ZBQTR'
-    i_subscriber_name    = 'ZBQTR_SUBSCRIBER'
-    i_context            = 'SAPI'
-    i_odpname            = <datasource>
-    i_extraction_mode    = 'D'  " or 'F'
-    i_explicit_close     = abap_true
-  IMPORTING
-    e_pointer            = lv_pointer.
-
-" Fetch data (loop)
-CALL FUNCTION 'RODPS_REPL_ODP_FETCH'
-  EXPORTING
-    i_pointer        = lv_pointer
-    i_maxpackagesize = 52428800  " 50 MB
-  IMPORTING
-    e_no_more_data   = lv_done
-  TABLES
-    et_data          = lt_data.
-
-" Close with confirmation
-CALL FUNCTION 'RODPS_REPL_ODP_CLOSE'
-  EXPORTING
-    i_pointer   = lv_pointer
-    i_confirmed = abap_true.  " or abap_false to rollback
 ```
 
 ### ZCL_IM_SAPI_BQ
@@ -295,18 +349,77 @@ ENDCLASS.
 
 | Method | Description |
 |--------|-------------|
-| DATA_TRANSFORM | Intercepts extracted data, sends to BigQuery |
+| DATA_TRANSFORM | Intercepts extracted data, verifies subscriber, sends to BigQuery |
 | HIER_TRANSFORM | Hierarchy extraction (not used) |
 
-**DATA_TRANSFORM Parameters**:
-| Parameter | Direction | Description |
-|-----------|-----------|-------------|
-| I_DATASOURCE | Importing | Datasource name |
-| I_UPDMODE | Importing | F=Full, D=Delta, R=Repeat, I=Init |
-| I_T_SELECT | Importing | Selection parameters |
-| I_T_FIELDS | Importing | Field list |
-| C_T_DATA | Changing | Data table |
-| C_T_MESSAGES | Changing | Messages |
+**DATA_TRANSFORM Logic**:
+
+```abap
+" Check if datasource was initialized by us
+DATA(ls_config) = get_datasource_config( lv_datasource ).
+IF ls_config IS INITIAL.
+  RETURN.  " Not our datasource
+ENDIF.
+
+" Verify subscriber identity
+IF ls_config-subscriber_type <> zcl_bq_odp_subscriber=>c_subscriber_type OR
+   ls_config-subscriber_name <> zcl_bq_odp_subscriber=>c_subscriber_name.
+  RETURN.  " Not our subscription
+ENDIF.
+
+" Replicate using stored config
+lo_replicator = NEW zcl_bq_replicator(
+  iv_datasource  = lv_datasource
+  iv_mass_tr_key = ls_config-mass_tr_key
+  iv_struct_name = ls_config-struct_name ).
+```
+
+---
+
+## Program Reference
+
+### Z_BQ_EXTRACTOR_RUN
+
+Main extraction program.
+
+**Selection Screen Parameters**:
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| p_ds | CHAR30 | Yes | Exact datasource name (no wildcards) |
+| p_mtkey | CHAR20 | Yes | BQ Toolkit Mass Transfer Key |
+| p_struct | CHAR30 | No | DDIC structure name |
+| p_mode | CHAR1 | No | Extraction mode (default D) |
+| p_test | CHAR1 | No | Test mode checkbox |
+| p_conn | CHAR1 | No | Connection pre-check checkbox |
+
+**Wildcard Validation**:
+
+```abap
+IF p_ds CA '*%'.
+  MESSAGE e000(zbqtr) WITH 'Wildcards not allowed. Specify exact datasource name.'.
+  RETURN.
+ENDIF.
+```
+
+**Config Registration**:
+
+```abap
+METHOD register_datasource_config.
+  DATA(ls_config) = VALUE zbqtr_config(
+    datasource       = iv_datasource
+    mass_tr_key      = mv_mass_tr_key
+    struct_name      = mv_struct_name
+    subscriber_type  = zcl_bq_odp_subscriber=>c_subscriber_type
+    subscriber_name  = zcl_bq_odp_subscriber=>c_subscriber_name
+    init_date        = sy-datum
+    init_time        = sy-uzeit
+    init_by          = sy-uname
+  ).
+  MODIFY zbqtr_config FROM ls_config.
+  COMMIT WORK AND WAIT.
+ENDMETHOD.
+```
 
 ---
 
@@ -328,6 +441,7 @@ ENDCLASS.
    RODPS_REPL_ODP_OPEN (mode = 'I')
    RODPS_REPL_ODP_CLOSE (confirmed = true)
    → Creates subscription in ODQMON
+   → Auto-populates ZBQTR_CONFIG
 
 2. DELTA EXTRACTION (Regular)
    RODPS_REPL_ODP_OPEN (mode = 'D')
@@ -348,14 +462,6 @@ ENDCLASS.
    RODPS_REPL_ODP_OPEN (mode = 'F')
    → Restart from scratch
 ```
-
-### ODQMON Tables
-
-| Table | Description |
-|-------|-------------|
-| ODQSN | Subscriptions |
-| ODQREQUESTH | Request headers |
-| ODQDATA | Delta data (actual records) |
 
 ---
 
@@ -416,19 +522,6 @@ Configure `ZBQTR_CONFIG.BATCH_SIZE` to control records per API call:
 | 5,000 | If BigQuery quota issues |
 | 50,000 | For high-volume, stable connections |
 
-### Parallel Processing
-
-Enable parallel processing for multiple datasources:
-
-```abap
-Run: Z_BQ_EXTRACTOR_RUN
-Parameters:
-  p_para = X
-  p_pgrp = ZBQTR  " Server group
-```
-
-Uses SPTA framework for parallel execution.
-
 ### Memory Optimization
 
 - ODP FETCH uses `i_maxpackagesize = 52428800` (50 MB)
@@ -447,12 +540,12 @@ Uses SPTA framework for parallel execution.
 
 ### Custom Filtering
 
-Override `ZCL_IM_SAPI_BQ->is_active_datasource()` for custom logic:
+Override `ZCL_IM_SAPI_BQ->get_datasource_config()` for custom logic:
 
 ```abap
-" Example: Filter by logical system
+" Example: Add additional validation
 IF iv_datasource(4) = '2LIS' AND sy-sysid = 'PRD'.
-  rv_active = abap_true.
+  " Custom production-only logic
 ENDIF.
 ```
 

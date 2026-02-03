@@ -24,8 +24,10 @@ REPORT z_bq_extractor_run.
 *----------------------------------------------------------------------*
 SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE TEXT-001.
 
-PARAMETERS: p_ds   TYPE char30 DEFAULT '*',  " Datasource filter (* = all)
-            p_mode TYPE char1 DEFAULT 'D'.   " D=Delta, F=Full, I=Init, R=Recovery, A=Auto
+PARAMETERS: p_ds     TYPE char30 OBLIGATORY,   " Datasource name (exact, no wildcards)
+            p_mtkey  TYPE char20 OBLIGATORY,   " BQ Toolkit Mass Transfer Key
+            p_struct TYPE char30,              " Structure name (optional, derived if blank)
+            p_mode   TYPE char1 DEFAULT 'D'.   " D=Delta, F=Full, I=Init, R=Recovery, A=Auto
 
 SELECTION-SCREEN SKIP.
 
@@ -34,19 +36,11 @@ PARAMETERS: p_test TYPE char1 AS CHECKBOX DEFAULT ' ',  " Test mode (no BQ write
 
 SELECTION-SCREEN END OF BLOCK b1.
 
-SELECTION-SCREEN BEGIN OF BLOCK b2 WITH FRAME TITLE TEXT-002.
-
-PARAMETERS: p_para TYPE char1 AS CHECKBOX DEFAULT ' ',  " Parallel processing
-            p_pgrp TYPE char10 DEFAULT 'ZBQTR'.         " Server group for parallel
-
-SELECTION-SCREEN END OF BLOCK b2.
-
 
 *----------------------------------------------------------------------*
 * Text Symbols
 *----------------------------------------------------------------------*
 * TEXT-001: Extraction Settings
-* TEXT-002: Performance Options
 * TEXT-010: Starting BQ Extractor Run
 * TEXT-011: Processing datasource:
 * TEXT-012: Records extracted:
@@ -76,16 +70,16 @@ CLASS lcl_extractor DEFINITION.
 
     METHODS constructor
       IMPORTING
-        iv_test_mode TYPE abap_bool DEFAULT abap_false.
+        iv_test_mode   TYPE abap_bool DEFAULT abap_false
+        iv_mass_tr_key TYPE char20
+        iv_struct_name TYPE char30 OPTIONAL.
 
-    "! Run extraction for all matching datasources
+    "! Run extraction for a single datasource
     METHODS run
       IMPORTING
-        iv_datasource_filter TYPE char30
-        iv_mode              TYPE char1
-        iv_check_connection  TYPE abap_bool DEFAULT abap_false
-        iv_parallel          TYPE abap_bool DEFAULT abap_false
-        iv_parallel_group    TYPE char10 DEFAULT 'ZBQTR'
+        iv_datasource       TYPE char30
+        iv_mode             TYPE char1
+        iv_check_connection TYPE abap_bool DEFAULT abap_false
       RETURNING
         VALUE(rt_results) TYPE tt_result.
 
@@ -99,6 +93,8 @@ CLASS lcl_extractor DEFINITION.
 
   PRIVATE SECTION.
     DATA mv_test_mode TYPE abap_bool.
+    DATA mv_mass_tr_key TYPE char20.
+    DATA mv_struct_name TYPE char30.
 
     "! Check BigQuery connectivity before extraction
     METHODS check_bq_connection
@@ -112,6 +108,11 @@ CLASS lcl_extractor DEFINITION.
       IMPORTING
         is_result TYPE ty_result.
 
+    "! Auto-populate ZBQTR_CONFIG during initialization
+    METHODS register_datasource_config
+      IMPORTING
+        iv_datasource TYPE char30.
+
 ENDCLASS.
 
 
@@ -119,78 +120,51 @@ CLASS lcl_extractor IMPLEMENTATION.
 
   METHOD constructor.
     mv_test_mode = iv_test_mode.
+    mv_mass_tr_key = iv_mass_tr_key.
+    mv_struct_name = iv_struct_name.
   ENDMETHOD.
 
 
   METHOD run.
-    DATA: lt_config TYPE TABLE OF zbqtr_config,
-          lv_filter TYPE char30.
-
-    " Convert * to % for LIKE
-    lv_filter = iv_datasource_filter.
-    REPLACE ALL OCCURRENCES OF '*' IN lv_filter WITH '%'.
-
-    " Get active datasources matching filter
-    SELECT * FROM zbqtr_config
-      WHERE active = 'X'
-        AND datasource LIKE @lv_filter
-      ORDER BY datasource
-      INTO TABLE @lt_config.
-
-    IF lt_config IS INITIAL.
-      WRITE: / TEXT-016, iv_datasource_filter.
-      RETURN.
-    ENDIF.
-
     WRITE: / TEXT-010.
-    WRITE: / |Mode: { iv_mode } - Datasources: { lines( lt_config ) }|.
+    WRITE: / |Datasource: { iv_datasource } - Mode: { iv_mode }|.
     ULINE.
 
     IF mv_test_mode = abap_true.
       WRITE: / TEXT-019.
     ENDIF.
 
-    " Process each datasource
-    LOOP AT lt_config INTO DATA(ls_config).
-
-      " Skip full-only datasources in delta mode
-      IF ls_config-full_only = abap_true AND iv_mode = 'D'.
-        WRITE: / |Skipping { ls_config-datasource } (full-only)|.
-        CONTINUE.
+    " Optional connection pre-check
+    IF iv_check_connection = abap_true.
+      IF check_bq_connection( iv_datasource ) = abap_false.
+        WRITE: / TEXT-017, iv_datasource.
+        APPEND VALUE #(
+          datasource = iv_datasource
+          mode       = iv_mode
+          success    = abap_false
+          message    = 'Connection pre-check failed'
+        ) TO rt_results.
+        RETURN.
       ENDIF.
+    ENDIF.
 
-      " Optional connection pre-check
-      IF iv_check_connection = abap_true.
-        IF check_bq_connection( ls_config-datasource ) = abap_false.
-          WRITE: / TEXT-017, ls_config-datasource.
-          APPEND VALUE #(
-            datasource = ls_config-datasource
-            mode       = iv_mode
-            success    = abap_false
-            message    = 'Connection pre-check failed'
-          ) TO rt_results.
-          CONTINUE.
-        ENDIF.
-      ENDIF.
+    " Process datasource
+    DATA(ls_result) = process_datasource(
+      iv_datasource = iv_datasource
+      iv_mode       = iv_mode ).
 
-      " Process datasource
-      DATA(ls_result) = process_datasource(
-        iv_datasource = ls_config-datasource
-        iv_mode       = iv_mode ).
-
-      APPEND ls_result TO rt_results.
-      output_result( ls_result ).
-    ENDLOOP.
+    APPEND ls_result TO rt_results.
+    output_result( ls_result ).
 
     ULINE.
     WRITE: / TEXT-018.
 
     " Summary
-    DATA(lv_success) = REDUCE i( INIT s = 0 FOR r IN rt_results WHERE ( success = abap_true ) NEXT s = s + 1 ).
-    DATA(lv_failed) = lines( rt_results ) - lv_success.
-    DATA(lv_total_records) = REDUCE i( INIT t = 0 FOR r IN rt_results NEXT t = t + r-records ).
-
-    WRITE: / |Summary: { lv_success } succeeded, { lv_failed } failed, { lv_total_records } total records|.
+    IF ls_result-success = abap_true.
+      WRITE: / |Success: { ls_result-records } records extracted|.
+    ELSE.
+      WRITE: / |Failed: { ls_result-message }|.
+    ENDIF.
   ENDMETHOD.
 
 
@@ -204,7 +178,10 @@ CLASS lcl_extractor IMPLEMENTATION.
     rs_result-mode = iv_mode.
 
     TRY.
-        DATA(lo_subscriber) = NEW zcl_bq_odp_subscriber( iv_datasource = iv_datasource ).
+        DATA(lo_subscriber) = NEW zcl_bq_odp_subscriber(
+          iv_datasource  = iv_datasource
+          iv_mass_tr_key = mv_mass_tr_key
+          iv_struct_name = mv_struct_name ).
 
         CASE iv_mode.
           WHEN 'F'.  " Full load
@@ -219,9 +196,11 @@ CLASS lcl_extractor IMPLEMENTATION.
 
           WHEN 'I'.  " Initialize subscription
             lo_subscriber->initialize_subscription( ).
+            " Auto-register in ZBQTR_CONFIG
+            register_datasource_config( iv_datasource ).
             rs_result-records = 0.
             rs_result-success = abap_true.
-            rs_result-message = 'Subscription initialized'.
+            rs_result-message = 'Subscription initialized and config registered'.
 
           WHEN 'R'.  " Recovery/repeat
             " Reset and run full
@@ -234,6 +213,11 @@ CLASS lcl_extractor IMPLEMENTATION.
             DATA(lv_is_new) = COND abap_bool(
               WHEN lo_subscriber->subscription_exists( ) = abap_false
               THEN abap_true ELSE abap_false ).
+
+            IF lv_is_new = abap_true.
+              " Auto-register in ZBQTR_CONFIG for new datasources
+              register_datasource_config( iv_datasource ).
+            ENDIF.
 
             rs_result-records = lo_subscriber->run_auto( ).
             rs_result-success = abap_true.
@@ -265,11 +249,31 @@ CLASS lcl_extractor IMPLEMENTATION.
 
   METHOD check_bq_connection.
     TRY.
-        DATA(lo_replicator) = NEW zcl_bq_replicator( iv_datasource = iv_datasource ).
+        DATA(lo_replicator) = NEW zcl_bq_replicator(
+          iv_datasource  = iv_datasource
+          iv_mass_tr_key = mv_mass_tr_key
+          iv_struct_name = mv_struct_name ).
         rv_connected = lo_replicator->test_connection( ).
       CATCH zcx_bq_replication_failed.
         rv_connected = abap_false.
     ENDTRY.
+  ENDMETHOD.
+
+
+  METHOD register_datasource_config.
+    DATA: ls_config TYPE zbqtr_config.
+
+    ls_config-datasource       = iv_datasource.
+    ls_config-mass_tr_key      = mv_mass_tr_key.
+    ls_config-struct_name      = mv_struct_name.
+    ls_config-subscriber_type  = zcl_bq_odp_subscriber=>c_subscriber_type.
+    ls_config-subscriber_name  = zcl_bq_odp_subscriber=>c_subscriber_name.
+    ls_config-init_date        = sy-datum.
+    ls_config-init_time        = sy-uzeit.
+    ls_config-init_by          = sy-uname.
+
+    MODIFY zbqtr_config FROM ls_config.
+    COMMIT WORK AND WAIT.
   ENDMETHOD.
 
 
@@ -295,6 +299,12 @@ ENDCLASS.
 *----------------------------------------------------------------------*
 START-OF-SELECTION.
 
+  " Validate no wildcards in datasource name
+  IF p_ds CA '*%'.
+    MESSAGE e000(zbqtr) WITH 'Wildcards not allowed. Specify exact datasource name.'.
+    RETURN.
+  ENDIF.
+
   " Validate mode parameter
   IF NOT p_mode CA 'FDIRA'.
     MESSAGE e000(zbqtr) WITH 'Invalid mode. Use F, D, I, R, or A.'.
@@ -303,14 +313,14 @@ START-OF-SELECTION.
 
   " Create extractor and run
   DATA(lo_extractor) = NEW lcl_extractor(
-    iv_test_mode = COND #( WHEN p_test = 'X' THEN abap_true ELSE abap_false ) ).
+    iv_test_mode   = COND #( WHEN p_test = 'X' THEN abap_true ELSE abap_false )
+    iv_mass_tr_key = p_mtkey
+    iv_struct_name = p_struct ).
 
   DATA(lt_results) = lo_extractor->run(
-    iv_datasource_filter = p_ds
-    iv_mode              = p_mode
-    iv_check_connection  = COND #( WHEN p_conn = 'X' THEN abap_true ELSE abap_false )
-    iv_parallel          = COND #( WHEN p_para = 'X' THEN abap_true ELSE abap_false )
-    iv_parallel_group    = p_pgrp ).
+    iv_datasource       = p_ds
+    iv_mode             = p_mode
+    iv_check_connection = COND #( WHEN p_conn = 'X' THEN abap_true ELSE abap_false ) ).
 
   " Set return code based on results
   DATA(lv_failed) = REDUCE i( INIT f = 0 FOR r IN lt_results WHERE ( success = abap_false ) NEXT f = f + 1 ).

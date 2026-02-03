@@ -4,11 +4,12 @@ A custom SAP extraction solution that replicates data from S-API extractors (Log
 
 ## Features
 
+- **Parameter-Driven Configuration**: Mass transfer key passed as input, no manual config maintenance
+- **Auto-Configuration**: ZBQTR_CONFIG auto-populated during initialization
 - **Direct ODP Integration**: No SAP BW required - uses ODP Replication API directly
-- **Scheduled Delta Extraction**: SM36 background job every 15 minutes
 - **Fail-Safe Design**: Failed extractions leave deltas unconfirmed for automatic retry
+- **Subscriber Verification**: BAdI only intercepts our initialized subscriptions
 - **Comprehensive Logging**: All operations tracked in ZBQTR_LOG
-- **ODQMON Compatible**: Full integration with SAP's delta queue monitoring
 
 ## Architecture
 
@@ -16,13 +17,13 @@ A custom SAP extraction solution that replicates data from S-API extractors (Log
 ┌─────────────────────────────────────────────────────────────────┐
 │  SM36 Job (Every 15 min)                                        │
 │       ↓                                                         │
-│  Z_BQ_EXTRACTOR_RUN → ZCL_BQ_ODP_SUBSCRIBER                    │
+│  Z_BQ_EXTRACTOR_RUN (p_ds, p_mtkey)                             │
 │       ↓                                                         │
-│  ODP Framework → S-API Extractor → RSU5_SAPI_BADI              │
+│  ZCL_BQ_ODP_SUBSCRIBER → ODP Framework → RSU5_SAPI_BADI         │
 │       ↓                                                         │
-│  ZCL_IM_SAPI_BQ → ZCL_BQ_REPLICATOR → BQ Toolkit               │
+│  ZCL_IM_SAPI_BQ (verifies subscriber) → ZCL_BQ_REPLICATOR       │
 │       ↓                                                         │
-│  Google BigQuery                                                │
+│  BQ Toolkit → Google BigQuery                                   │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -38,30 +39,29 @@ A custom SAP extraction solution that replicates data from S-API extractors (Log
 
 See [docs/INSTALL.md](docs/INSTALL.md) for detailed installation steps.
 
-### Installation Options
+### Quick Start
 
-| Method | Best For |
-|--------|----------|
-| **abapGit** | Version control, easy updates, development systems |
-| **Transport Request** | Production systems, traditional SAP deployment |
+1. **Install via abapGit**: Clone repository into package `ZBQTR`
+2. **Configure Mass Transfer Key** in `/GOOG/BQTR_SETTINGS`
+3. **Initialize datasource**:
+   ```
+   Z_BQ_EXTRACTOR_RUN
+   - p_ds     = 2LIS_11_VAHDR     (exact datasource name)
+   - p_mtkey  = ZMTR_SALES_HDR    (your mass transfer key)
+   - p_mode   = I                  (initialize)
+   ```
+4. **Run full load**: Same parameters with `p_mode = F`
+5. **Schedule delta job in SM36**: Same parameters with `p_mode = D`
 
-### Quick Start (abapGit)
+### Important: No Wildcards
 
-1. Install via abapGit: Clone repository into package `ZBQTR`
-2. Configure `/GOOG/BQTR_SETTINGS` for authentication
-3. Add datasources to `ZBQTR_CONFIG` (SM30)
-4. Initialize subscriptions: `Z_BQ_EXTRACTOR_RUN` with mode = I
-5. Run full load: `Z_BQ_EXTRACTOR_RUN` with mode = F
-6. Schedule delta job in SM36 (every 15 min)
+The `p_ds` parameter requires an **exact datasource name**. Wildcards are not supported:
 
-### Quick Start (Transport)
-
-1. Import transport request via STMS
-2. Configure `/GOOG/BQTR_SETTINGS` for authentication
-3. Add datasources to `ZBQTR_CONFIG` (SM30)
-4. Initialize subscriptions: `Z_BQ_EXTRACTOR_RUN` with mode = I
-5. Run full load: `Z_BQ_EXTRACTOR_RUN` with mode = F
-6. Schedule delta job in SM36 (every 15 min)
+```
+VALID:   p_ds = 2LIS_11_VAHDR
+INVALID: p_ds = 2LIS_*
+INVALID: p_ds = *
+```
 
 ## Components
 
@@ -69,7 +69,7 @@ See [docs/INSTALL.md](docs/INSTALL.md) for detailed installation steps.
 
 | Table | Description |
 |-------|-------------|
-| ZBQTR_CONFIG | Datasource configuration |
+| ZBQTR_CONFIG | Auto-populated datasource configuration |
 | ZBQTR_LOG | Replication audit log |
 | ZBQTR_SUBSC | ODP subscription tracking |
 
@@ -78,9 +78,9 @@ See [docs/INSTALL.md](docs/INSTALL.md) for detailed installation steps.
 | Class | Description |
 |-------|-------------|
 | ZCX_BQ_REPLICATION_FAILED | Custom exception for failures |
-| ZCL_BQ_REPLICATOR | BQ Toolkit wrapper with error handling |
+| ZCL_BQ_REPLICATOR | BQ Toolkit wrapper with fallback logic |
 | ZCL_BQ_ODP_SUBSCRIBER | ODP subscription manager |
-| ZCL_IM_SAPI_BQ | BAdI implementation |
+| ZCL_IM_SAPI_BQ | BAdI implementation with subscriber verification |
 
 ### Programs
 
@@ -89,11 +89,64 @@ See [docs/INSTALL.md](docs/INSTALL.md) for detailed installation steps.
 | Z_BQ_EXTRACTOR_RUN | Main scheduler program |
 | Z_BQ_EXTRACTOR_MONITOR | Monitoring and status report |
 
-### BAdI
+## Program Parameters
 
-| Object | Description |
-|--------|-------------|
-| Z_SAPI_BQ_REPLICATION | Implementation of RSU5_SAPI_BADI |
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| p_ds | Yes | Exact datasource name (no wildcards) |
+| p_mtkey | Yes | BQ Toolkit Mass Transfer Key |
+| p_struct | No | DDIC structure name (derived if blank) |
+| p_mode | No | Extraction mode: D, F, I, R, A (default: D) |
+| p_test | No | Test mode - no BQ write |
+| p_conn | No | Pre-check BQ connection |
+
+## Extraction Modes
+
+| Mode | Description |
+|------|-------------|
+| D | Delta extraction (default) |
+| F | Full extraction |
+| I | Initialize subscription + register config |
+| R | Recovery (reset + full) |
+| A | Auto (Init+Full if new, Delta if exists) |
+
+## Usage
+
+### Initialize Datasource
+
+```
+Program: Z_BQ_EXTRACTOR_RUN
+Parameters:
+  p_ds     = 2LIS_02_SGR
+  p_mtkey  = ZMTR_2LIS_02_SGR
+  p_mode   = I
+```
+
+This creates the ODP subscription and auto-populates ZBQTR_CONFIG.
+
+### Run Full Load
+
+```
+Parameters:
+  p_ds     = 2LIS_02_SGR
+  p_mtkey  = ZMTR_2LIS_02_SGR
+  p_mode   = F
+```
+
+### Run Delta Extraction
+
+```
+Parameters:
+  p_ds     = 2LIS_02_SGR
+  p_mtkey  = ZMTR_2LIS_02_SGR
+  p_mode   = D
+```
+
+### Monitor Status
+
+```
+Program: Z_BQ_EXTRACTOR_MONITOR
+```
 
 ## Supported Datasources
 
@@ -115,32 +168,6 @@ See [docs/INSTALL.md](docs/INSTALL.md) for detailed installation steps.
 - 0FI_AP_4 - AP Line Items
 - 0CO_OM_CCA_1 - Cost Center Actuals
 - And more...
-
-## Usage
-
-### Run Delta Extraction
-
-```
-Program: Z_BQ_EXTRACTOR_RUN
-Parameters:
-  p_ds = *           (all datasources)
-  p_mode = D         (delta)
-```
-
-### Run Full Load
-
-```
-Program: Z_BQ_EXTRACTOR_RUN
-Parameters:
-  p_ds = 2LIS_02_SGR (specific datasource)
-  p_mode = F         (full)
-```
-
-### Monitor Status
-
-```
-Program: Z_BQ_EXTRACTOR_MONITOR
-```
 
 ## Error Handling
 

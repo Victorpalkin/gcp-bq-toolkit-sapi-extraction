@@ -157,10 +157,12 @@ After successful import, continue with **Step 2: Configure Google Cloud Authenti
 2. Set up the ABAP SDK to use WIF as per Google documentation
 3. No key management required - uses SAP system identity
 
-### Step 3: Configure Mass Transfer in BQ Toolkit
+### Step 3: Configure Mass Transfer Keys in BQ Toolkit
+
+For each datasource you want to replicate, create a Mass Transfer Key:
 
 1. Navigate to transaction `/GOOG/BQTR_SETTINGS`
-2. Create Mass Transfer Key entries for each datasource:
+2. Create Mass Transfer Key entry:
 
 | Field | Description | Example |
 |-------|-------------|---------|
@@ -170,26 +172,9 @@ After successful import, continue with **Step 2: Configure Google Cloud Authenti
 | Target Table | BigQuery table | `logistics_goods_receipts` |
 | Structure Name | DDIC structure | `MC02M_0GRTP` |
 
-3. For each datasource you want to replicate, create a corresponding Mass Transfer Key
+**Note**: ZBQTR_CONFIG is auto-populated during initialization. You only need to configure Mass Transfer Keys in `/GOOG/BQTR_SETTINGS`.
 
-### Step 4: Configure Extractor Datasources
-
-1. Navigate to transaction **SM30**
-2. Open view `ZBQTR_CONFIG` for maintenance
-3. Add entries for each S-API datasource:
-
-| Field | Description | Example Values |
-|-------|-------------|----------------|
-| DATASOURCE | S-API datasource name | `2LIS_02_SGR`, `0FI_GL_4` |
-| MASS_TR_KEY | Mass Transfer Key from Step 3 | `ZMTR_2LIS_02_SGR` |
-| STRUCT_NAME | Dictionary structure | `MC02M_0GRTP` |
-| BQ_DATASET | Target BigQuery dataset | `sap_extracts` |
-| BQ_TABLE | Target BigQuery table | `logistics_goods_receipts` |
-| ACTIVE | Enable extraction | `X` |
-| FULL_ONLY | Skip delta extraction | ` ` (blank for delta) |
-| BATCH_SIZE | Records per API call | `10000` (0 = unlimited) |
-
-### Step 5: Activate BAdI Implementation
+### Step 4: Activate BAdI Implementation
 
 1. Navigate to transaction **SE19**
 2. Open BAdI Implementation `Z_SAPI_BQ_REPLICATION`
@@ -198,40 +183,46 @@ After successful import, continue with **Step 2: Configure Google Cloud Authenti
 
 Alternatively, use transaction **SE18** to view the BAdI definition `RSU5_SAPI_BADI` and confirm the implementation is registered.
 
-### Step 6: Initialize ODP Subscriptions
+### Step 5: Initialize First Datasource
 
-For each configured datasource, initialize the ODP subscription:
+Initialize an ODP subscription and auto-register configuration:
 
 1. Run program `Z_BQ_EXTRACTOR_RUN` in dialog mode (SE38)
 2. Parameters:
-   - **Datasource**: `*` (all) or specific datasource
-   - **Mode**: `I` (Initialize)
+   - **p_ds**: Exact datasource name (e.g., `2LIS_02_SGR`)
+   - **p_mtkey**: Mass Transfer Key from Step 3 (e.g., `ZMTR_2LIS_02_SGR`)
+   - **p_struct**: (optional) DDIC structure name
+   - **p_mode**: `I` (Initialize)
 3. Execute
 
-This creates the subscription entries in ODQMON without extracting data.
+This:
+- Creates the ODP subscription in ODQMON
+- Auto-populates ZBQTR_CONFIG with datasource configuration
 
-### Step 7: Run Initial Full Load
+### Step 6: Run Initial Full Load
 
 After initialization, run a full load to populate BigQuery:
 
 1. Run program `Z_BQ_EXTRACTOR_RUN`
 2. Parameters:
-   - **Datasource**: `*` (all) or specific datasource
-   - **Mode**: `F` (Full)
+   - **p_ds**: Same datasource name
+   - **p_mtkey**: Same Mass Transfer Key
+   - **p_mode**: `F` (Full)
 3. Execute
 
-**Note**: Full loads can take significant time depending on data volume. Consider running for individual datasources initially.
+**Note**: Full loads can take significant time depending on data volume.
 
-### Step 8: Configure Background Job (SM36)
+### Step 7: Configure Background Job (SM36)
 
 1. Navigate to transaction **SM36**
 2. Create a new job:
-   - **Job Name**: `Z_BQ_EXTRACTOR_DELTA`
+   - **Job Name**: `Z_BQ_DELTA_<DATASOURCE>`
    - **Job Class**: B (Normal priority)
 3. Define step:
    - **Program**: `Z_BQ_EXTRACTOR_RUN`
    - **Variant**: Create variant with:
-     - p_ds = `*`
+     - p_ds = `<datasource name>`
+     - p_mtkey = `<mass transfer key>`
      - p_mode = `D`
      - p_test = ` ` (unchecked)
      - p_conn = `X` (recommended for connection pre-check)
@@ -239,6 +230,8 @@ After initialization, run a full load to populate BigQuery:
    - **Period**: Every 15 minutes
    - Alternatively: Use calendar or custom schedule
 5. Save and release the job
+
+Repeat for each datasource you want to extract.
 
 ---
 
@@ -248,17 +241,26 @@ After initialization, run a full load to populate BigQuery:
 
 ```
 1. Create test transaction in SAP (e.g., goods receipt via MIGO)
-2. Run Z_BQ_EXTRACTOR_RUN with mode = D
+2. Run Z_BQ_EXTRACTOR_RUN with:
+   - p_ds = <datasource>
+   - p_mtkey = <mass transfer key>
+   - p_mode = D
 3. Check ZBQTR_LOG for success entry
 4. Verify data in BigQuery Console
 ```
+
+### Check ZBQTR_CONFIG
+
+1. Transaction **SE16**
+2. Table: `ZBQTR_CONFIG`
+3. Verify datasource is registered with correct mass transfer key
 
 ### Check ODQMON
 
 1. Transaction **ODQMON**
 2. Select Subscriptions view
 3. Filter by Subscriber = `ZBQTR_SUBSCRIBER`
-4. Verify all datasources show as "Active" with confirmed deltas
+4. Verify datasources show as "Active" with confirmed deltas
 
 ### Monitor Log
 
@@ -273,14 +275,25 @@ After initialization, run a full load to populate BigQuery:
 ### BAdI Not Triggering
 
 - Verify BAdI implementation is active (SE19)
-- Check that datasource is in ZBQTR_CONFIG with ACTIVE = 'X'
-- Ensure ODP subscription exists (ODQMON)
+- Check that datasource is in ZBQTR_CONFIG (run initialization first)
+- Ensure subscriber_type and subscriber_name match in config
 
 ### BigQuery Connection Errors
 
 - Check service account permissions in GCP Console
 - Verify Client Key configuration in `/GOOG/BQTR_SETTINGS`
 - Test connection using BQ Toolkit test utilities
+
+### "Mass transfer key required" Error
+
+- The p_mtkey parameter is mandatory
+- Ensure mass transfer key exists in `/GOOG/BQTR_SETTINGS`
+
+### "Wildcards not allowed" Error
+
+- The p_ds parameter requires exact datasource name
+- Wildcards (`*`, `%`) are not supported
+- Specify the full datasource name (e.g., `2LIS_11_VAHDR`)
 
 ### Delta Not Confirmed
 
@@ -300,6 +313,25 @@ After initialization, run a full load to populate BigQuery:
 - Check for naming conflicts with existing objects
 - Verify user has developer key for all object types
 - Try pulling in offline mode if online fails
+
+---
+
+## Migration from Previous Version
+
+If upgrading from a version that used manual ZBQTR_CONFIG maintenance:
+
+1. **Backup existing config**: Export ZBQTR_CONFIG entries
+2. **Pull new code**: Update via abapGit or transport
+3. **Re-initialize datasources**: For each existing datasource:
+   ```
+   p_ds = <datasource>
+   p_mtkey = <mass transfer key from old config>
+   p_mode = I
+   ```
+   This populates the new config table structure
+
+4. **Update job variants**: Ensure p_mtkey is included in all variants
+5. **Test**: Run delta extraction and verify data flow
 
 ---
 

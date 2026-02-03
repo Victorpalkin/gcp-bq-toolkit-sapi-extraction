@@ -7,17 +7,7 @@ CLASS zcl_im_sapi_bq DEFINITION
     INTERFACES if_ex_rsu5_sapi_badi.
 
   PRIVATE SECTION.
-    CLASS-DATA gt_active_ds TYPE SORTED TABLE OF char30 WITH UNIQUE KEY table_line.
-    CLASS-DATA gv_initialized TYPE abap_bool.
     CLASS-DATA gv_test_mode TYPE abap_bool.
-
-    CLASS-METHODS load_active_datasources.
-
-    CLASS-METHODS is_active_datasource
-      IMPORTING
-        iv_datasource    TYPE char30
-      RETURNING
-        VALUE(rv_active) TYPE abap_bool.
 
     CLASS-METHODS get_datasource_config
       IMPORTING
@@ -40,13 +30,17 @@ CLASS zcl_im_sapi_bq IMPLEMENTATION.
     lv_datasource = i_datasource.
     lv_updmode = i_updmode.
 
-    " Initialize active datasource cache on first call
-    IF gv_initialized = abap_false.
-      load_active_datasources( ).
+    " Check if datasource was initialized by us (exists in ZBQTR_CONFIG)
+    DATA(ls_config) = get_datasource_config( lv_datasource ).
+    IF ls_config IS INITIAL.
+      " Not our datasource - skip replication
+      RETURN.
     ENDIF.
 
-    " Check if this datasource should be replicated
-    IF is_active_datasource( lv_datasource ) = abap_false.
+    " Verify this is our subscription (check subscriber type/name match)
+    IF ls_config-subscriber_type <> zcl_bq_odp_subscriber=>c_subscriber_type OR
+       ls_config-subscriber_name <> zcl_bq_odp_subscriber=>c_subscriber_name.
+      " Not our subscription - skip replication
       RETURN.
     ENDIF.
 
@@ -60,17 +54,17 @@ CLASS zcl_im_sapi_bq IMPLEMENTATION.
       RETURN.
     ENDIF.
 
-    " Get datasource configuration
-    DATA(ls_config) = get_datasource_config( lv_datasource ).
-
     " Check if this is full-only datasource running in delta mode
     IF ls_config-full_only = abap_true AND lv_updmode = 'D'.
       RETURN.
     ENDIF.
 
-    " Replicate data to BigQuery
+    " Replicate data to BigQuery using stored config
     TRY.
-        lo_replicator = NEW zcl_bq_replicator( iv_datasource = lv_datasource ).
+        lo_replicator = NEW zcl_bq_replicator(
+          iv_datasource  = lv_datasource
+          iv_mass_tr_key = ls_config-mass_tr_key
+          iv_struct_name = ls_config-struct_name ).
 
         ls_result = lo_replicator->replicate(
           it_data    = c_t_data
@@ -116,23 +110,6 @@ CLASS zcl_im_sapi_bq IMPLEMENTATION.
 
   METHOD if_ex_rsu5_sapi_badi~hier_transform.
     " Hierarchy extraction - not used for this solution
-  ENDMETHOD.
-
-
-  METHOD load_active_datasources.
-    SELECT datasource FROM zbqtr_config
-      WHERE active = 'X'
-      INTO TABLE @gt_active_ds.
-
-    gv_initialized = abap_true.
-  ENDMETHOD.
-
-
-  METHOD is_active_datasource.
-    READ TABLE gt_active_ds WITH KEY table_line = iv_datasource
-      TRANSPORTING NO FIELDS.
-
-    rv_active = COND #( WHEN sy-subrc = 0 THEN abap_true ELSE abap_false ).
   ENDMETHOD.
 
 

@@ -17,7 +17,9 @@ CLASS zcl_bq_odp_subscriber DEFINITION
 
     METHODS constructor
       IMPORTING
-        iv_datasource TYPE char30.
+        iv_datasource  TYPE char30
+        iv_mass_tr_key TYPE char20 OPTIONAL
+        iv_struct_name TYPE char30 OPTIONAL.
 
     METHODS initialize_subscription
       RETURNING VALUE(rv_success) TYPE abap_bool
@@ -50,8 +52,16 @@ CLASS zcl_bq_odp_subscriber DEFINITION
     METHODS get_pointer
       RETURNING VALUE(rv_pointer) TYPE char32.
 
+    METHODS get_mass_tr_key
+      RETURNING VALUE(rv_mass_tr_key) TYPE char20.
+
+    METHODS get_struct_name
+      RETURNING VALUE(rv_struct_name) TYPE char30.
+
   PRIVATE SECTION.
     DATA mv_datasource TYPE char30.
+    DATA mv_mass_tr_key TYPE char20.
+    DATA mv_struct_name TYPE char30.
     DATA mv_pointer TYPE char32.
     DATA mv_process_id TYPE char30.
     DATA mv_current_mode TYPE char1.
@@ -94,6 +104,8 @@ CLASS zcl_bq_odp_subscriber IMPLEMENTATION.
 
   METHOD constructor.
     mv_datasource = iv_datasource.
+    mv_mass_tr_key = iv_mass_tr_key.
+    mv_struct_name = iv_struct_name.
     mv_process_id = generate_process_id( ).
   ENDMETHOD.
 
@@ -361,6 +373,16 @@ CLASS zcl_bq_odp_subscriber IMPLEMENTATION.
 
   METHOD get_pointer.
     rv_pointer = mv_pointer.
+  ENDMETHOD.
+
+
+  METHOD get_mass_tr_key.
+    rv_mass_tr_key = mv_mass_tr_key.
+  ENDMETHOD.
+
+
+  METHOD get_struct_name.
+    rv_struct_name = mv_struct_name.
   ENDMETHOD.
 
 
