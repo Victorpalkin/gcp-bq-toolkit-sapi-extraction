@@ -6,7 +6,7 @@
 *&
 *& Features:
 *&   - View replication log (ZBQTR_LOG)
-*&   - Check subscription status (ZBQTR_SUBSCRIPTION)
+*&   - Check subscription status (ZBQTR_SUBSC)
 *&   - Query ODQMON for pending deltas
 *&   - Alert on consecutive failures
 *&
@@ -72,15 +72,15 @@ TYPES: BEGIN OF ty_log_display,
        END OF ty_log_display.
 
 TYPES: BEGIN OF ty_sub_display,
-         datasource            TYPE zbqtr_subscription-datasource,
-         subscriber_id         TYPE zbqtr_subscription-subscriber_id,
-         last_delta_date       TYPE zbqtr_subscription-last_delta_date,
-         last_delta_time       TYPE zbqtr_subscription-last_delta_time,
-         last_records          TYPE zbqtr_subscription-last_records,
-         total_records         TYPE zbqtr_subscription-total_records,
-         status                TYPE zbqtr_subscription-status,
-         consecutive_failures  TYPE zbqtr_subscription-consecutive_failures,
-         last_error            TYPE zbqtr_subscription-last_error,
+         datasource            TYPE zbqtr_subsc-datasource,
+         subscriber_id         TYPE zbqtr_subsc-subscriber_id,
+         last_delta_date       TYPE zbqtr_subsc-last_delta_date,
+         last_delta_time       TYPE zbqtr_subsc-last_delta_time,
+         last_records          TYPE zbqtr_subsc-last_records,
+         total_records         TYPE zbqtr_subsc-total_records,
+         status                TYPE zbqtr_subsc-status,
+         consecutive_failures  TYPE zbqtr_subsc-consecutive_failures,
+         last_error            TYPE zbqtr_subsc-last_error,
          status_icon           TYPE icon_d,
        END OF ty_sub_display.
 
@@ -175,13 +175,13 @@ CLASS lcl_monitor IMPLEMENTATION.
 
 
   METHOD show_subscriptions.
-    DATA: lt_sub    TYPE TABLE OF zbqtr_subscription,
+    DATA: lt_sub    TYPE TABLE OF zbqtr_subsc,
           lv_filter TYPE char30.
 
     lv_filter = iv_datasource_filter.
     REPLACE ALL OCCURRENCES OF '*' IN lv_filter WITH '%'.
 
-    SELECT * FROM zbqtr_subscription
+    SELECT * FROM zbqtr_subsc
       WHERE datasource LIKE @lv_filter
       ORDER BY datasource
       INTO TABLE @lt_sub.
@@ -252,7 +252,7 @@ CLASS lcl_monitor IMPLEMENTATION.
     WRITE: / TEXT-013.
     ULINE.
 
-    SELECT * FROM zbqtr_subscription
+    SELECT * FROM zbqtr_subsc
       WHERE datasource LIKE @lv_filter
         AND consecutive_failures > 0
       ORDER BY consecutive_failures DESCENDING

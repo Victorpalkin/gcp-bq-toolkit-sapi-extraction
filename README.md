@@ -71,7 +71,7 @@ See [docs/INSTALL.md](docs/INSTALL.md) for detailed installation steps.
 |-------|-------------|
 | ZBQTR_CONFIG | Datasource configuration |
 | ZBQTR_LOG | Replication audit log |
-| ZBQTR_SUBSCRIPTION | ODP subscription tracking |
+| ZBQTR_SUBSC | ODP subscription tracking |
 
 ### Classes
 
@@ -170,7 +170,7 @@ bqtoolkitextractor/
     ├── tables/
     │   ├── zbqtr_config.tabl.xml
     │   ├── zbqtr_log.tabl.xml
-    │   └── zbqtr_subscription.tabl.xml
+    │   └── zbqtr_subsc.tabl.xml
     ├── classes/
     │   ├── zcx_bq_replication_failed.clas.abap
     │   ├── zcl_bq_replicator.clas.abap

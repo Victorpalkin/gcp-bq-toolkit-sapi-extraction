@@ -119,7 +119,7 @@ ORDER BY timestamp DESC
 #### Consecutive Failures
 ```sql
 SELECT datasource, consecutive_failures, last_error
-FROM zbqtr_subscription
+FROM zbqtr_subsc
 WHERE consecutive_failures > 0
 ORDER BY consecutive_failures DESC
 ```

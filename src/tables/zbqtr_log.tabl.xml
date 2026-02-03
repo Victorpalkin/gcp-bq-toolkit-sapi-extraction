@@ -8,6 +8,7 @@
     <TABCLASS>TRANSP</TABCLASS>
     <DDTEXT>BQ Toolkit Replication Log</DDTEXT>
     <CONTFLAG>A</CONTFLAG>
+    <EXCLASS>1</EXCLASS>
     <MATEFLAG>M</MATEFLAG>
    </DD02V>
    <DD09L>

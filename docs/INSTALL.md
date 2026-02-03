@@ -89,7 +89,7 @@ abapGit provides version control integration and simplified updates from the rep
 1. After pulling, abapGit will show objects to activate
 2. Click **Activate** to activate all objects
 3. Resolve any activation errors in dependency order:
-   - Tables first (ZBQTR_CONFIG, ZBQTR_LOG, ZBQTR_SUBSCRIPTION)
+   - Tables first (ZBQTR_CONFIG, ZBQTR_LOG, ZBQTR_SUBSC)
    - Exception class (ZCX_BQ_REPLICATION_FAILED)
    - Classes (ZCL_BQ_REPLICATOR, ZCL_BQ_ODP_SUBSCRIBER, ZCL_IM_SAPI_BQ)
    - BAdI implementation
@@ -126,7 +126,7 @@ Use this method for production deployments or systems without abapGit.
 3. Add transport to import queue in transaction **STMS**
 4. Import into your development system
 5. Transport contains:
-   - Tables: `ZBQTR_CONFIG`, `ZBQTR_LOG`, `ZBQTR_SUBSCRIPTION`
+   - Tables: `ZBQTR_CONFIG`, `ZBQTR_LOG`, `ZBQTR_SUBSC`
    - Classes: `ZCX_BQ_REPLICATION_FAILED`, `ZCL_BQ_REPLICATOR`, `ZCL_BQ_ODP_SUBSCRIBER`, `ZCL_IM_SAPI_BQ`
    - Programs: `Z_BQ_EXTRACTOR_RUN`, `Z_BQ_EXTRACTOR_MONITOR`
    - BAdI Implementation: `Z_SAPI_BQ_REPLICATION`

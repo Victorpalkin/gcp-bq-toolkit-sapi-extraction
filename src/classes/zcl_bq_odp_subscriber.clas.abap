@@ -74,7 +74,7 @@ CLASS zcl_bq_odp_subscriber DEFINITION
     "!
     "! @parameter rs_status | Subscription status record
     METHODS get_subscription_status
-      RETURNING VALUE(rs_status) TYPE zbqtr_subscription.
+      RETURNING VALUE(rs_status) TYPE zbqtr_subsc.
 
     "! <p class="shorttext synchronized">Get current datasource</p>
     "!
@@ -165,14 +165,14 @@ CLASS zcl_bq_odp_subscriber IMPLEMENTATION.
         close_extraction( abap_true ).
 
         " Create tracking record
-        DATA: ls_sub TYPE zbqtr_subscription.
+        DATA: ls_sub TYPE zbqtr_subsc.
         ls_sub-datasource     = mv_datasource.
         ls_sub-subscriber_id  = c_subscriber_name.
         ls_sub-init_date      = sy-datum.
         ls_sub-init_time      = sy-uzeit.
         ls_sub-status         = 'A'.  " Active
 
-        MODIFY zbqtr_subscription FROM ls_sub.
+        MODIFY zbqtr_subsc FROM ls_sub.
         COMMIT WORK AND WAIT.
 
         rv_success = abap_true.
@@ -394,7 +394,7 @@ CLASS zcl_bq_odp_subscriber IMPLEMENTATION.
 
     IF rv_success = abap_true.
       " Update tracking table
-      UPDATE zbqtr_subscription
+      UPDATE zbqtr_subsc
         SET status = 'I'
             last_delta_pointer = ''
         WHERE datasource = @mv_datasource.
@@ -419,7 +419,7 @@ CLASS zcl_bq_odp_subscriber IMPLEMENTATION.
 
 
   METHOD get_subscription_status.
-    SELECT SINGLE * FROM zbqtr_subscription
+    SELECT SINGLE * FROM zbqtr_subsc
       WHERE datasource = @mv_datasource
       INTO @rs_status.
   ENDMETHOD.
@@ -436,10 +436,10 @@ CLASS zcl_bq_odp_subscriber IMPLEMENTATION.
 
 
   METHOD update_subscription_tracking.
-    DATA: ls_sub TYPE zbqtr_subscription.
+    DATA: ls_sub TYPE zbqtr_subsc.
 
     " Read existing record
-    SELECT SINGLE * FROM zbqtr_subscription
+    SELECT SINGLE * FROM zbqtr_subsc
       WHERE datasource = @mv_datasource
       INTO @ls_sub.
 
@@ -460,15 +460,15 @@ CLASS zcl_bq_odp_subscriber IMPLEMENTATION.
       ls_sub-last_error = iv_error.
     ENDIF.
 
-    MODIFY zbqtr_subscription FROM ls_sub.
+    MODIFY zbqtr_subsc FROM ls_sub.
     COMMIT WORK AND WAIT.
   ENDMETHOD.
 
 
   METHOD record_success.
-    DATA: ls_sub TYPE zbqtr_subscription.
+    DATA: ls_sub TYPE zbqtr_subsc.
 
-    SELECT SINGLE * FROM zbqtr_subscription
+    SELECT SINGLE * FROM zbqtr_subsc
       WHERE datasource = @mv_datasource
       INTO @ls_sub.
 
@@ -488,15 +488,15 @@ CLASS zcl_bq_odp_subscriber IMPLEMENTATION.
       ls_sub-init_time = sy-uzeit.
     ENDIF.
 
-    MODIFY zbqtr_subscription FROM ls_sub.
+    MODIFY zbqtr_subsc FROM ls_sub.
     COMMIT WORK AND WAIT.
   ENDMETHOD.
 
 
   METHOD record_failure.
-    DATA: ls_sub TYPE zbqtr_subscription.
+    DATA: ls_sub TYPE zbqtr_subsc.
 
-    SELECT SINGLE * FROM zbqtr_subscription
+    SELECT SINGLE * FROM zbqtr_subsc
       WHERE datasource = @mv_datasource
       INTO @ls_sub.
 
@@ -513,7 +513,7 @@ CLASS zcl_bq_odp_subscriber IMPLEMENTATION.
       ls_sub-init_time = sy-uzeit.
     ENDIF.
 
-    MODIFY zbqtr_subscription FROM ls_sub.
+    MODIFY zbqtr_subsc FROM ls_sub.
     COMMIT WORK AND WAIT.
 
     " Alert if consecutive failures exceed threshold

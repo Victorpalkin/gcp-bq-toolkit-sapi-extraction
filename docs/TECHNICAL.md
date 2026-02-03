@@ -105,7 +105,7 @@ Replication log table.
 | JOB_NAME | CHAR(32) | Background job name |
 | JOB_COUNT | NUMC(8) | Background job count |
 
-### ZBQTR_SUBSCRIPTION
+### ZBQTR_SUBSC
 
 ODP subscription tracking table.
 
@@ -396,7 +396,7 @@ Delta remains in ODQMON for retry
 
 ### Consecutive Failure Tracking
 
-- `ZBQTR_SUBSCRIPTION.CONSECUTIVE_FAILURES` increments on each failure
+- `ZBQTR_SUBSC.CONSECUTIVE_FAILURES` increments on each failure
 - Resets to 0 on success
 - Alert triggered when threshold (3) exceeded
 - Logged to SM21 system log
