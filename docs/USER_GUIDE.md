@@ -18,9 +18,48 @@ The solution extracts data from SAP S-API extractors (Logistics 2LIS_* and FI/CO
 
 ---
 
-## Quick Start: Scheduling Full + Delta Extraction Jobs
+## Quick Start: Scheduling Extraction Jobs (Auto Mode)
 
-This section shows how to set up automated extraction for a list of datasources: an initial full load followed by recurring delta extractions.
+The simplest way to set up extraction is using **Auto mode** (`A`), which
+automatically handles both initialization and ongoing deltas.
+
+### How Auto Mode Works
+
+| Datasource State | Auto Mode Action |
+|------------------|------------------|
+| New (no subscription) | Initialize → Full Load |
+| Existing (has subscription) | Delta Load |
+
+### Step 1: Configure Datasources
+
+1. SM30 → View `ZBQTR_CONFIG`
+2. Add entries for each datasource with ACTIVE = 'X'
+
+### Step 2: Create Single Scheduled Job
+
+1. **SM36** → Define Background Job
+2. Job Name: `Z_BQ_EXTRACTION`
+3. Create step with program `Z_BQ_EXTRACTOR_RUN`
+4. Create variant:
+   | Parameter | Value | Description |
+   |-----------|-------|-------------|
+   | p_ds | * | All active datasources |
+   | p_mode | A | Auto mode |
+   | p_para | X | Parallel processing |
+5. Set periodic schedule (e.g., every 15 minutes)
+6. Save and release
+
+### That's It!
+
+- First run: Each datasource is initialized and fully loaded
+- Subsequent runs: Delta extraction for all datasources
+- New datasources added to ZBQTR_CONFIG are automatically picked up
+
+---
+
+## Alternative: Manual Full + Delta Extraction Jobs
+
+This section shows how to set up automated extraction using separate initialization, full load, and delta jobs.
 
 ### Prerequisites
 
@@ -265,6 +304,16 @@ ORDER BY consecutive_failures DESC
 ---
 
 ## Common Operations
+
+### Extraction Modes Reference
+
+| Mode | Description |
+|------|-------------|
+| D | Delta extraction (for existing subscriptions) |
+| F | Full extraction (reload all data) |
+| I | Initialize subscription only |
+| R | Recovery (reset + full) |
+| A | Auto (Init+Full if new, Delta if exists) |
 
 ### Manual Delta Extraction
 

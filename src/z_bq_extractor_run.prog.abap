@@ -13,6 +13,7 @@
 *&   F = Full extraction (initial load or refresh)
 *&   I = Initialize subscription (first time setup)
 *&   R = Recovery/repeat delta
+*&   A = Auto (Init+Full if new, Delta if exists)
 *&
 *& Author: SAP BQ Toolkit Integration
 *&---------------------------------------------------------------------*
@@ -24,7 +25,7 @@ REPORT z_bq_extractor_run.
 SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE TEXT-001.
 
 PARAMETERS: p_ds   TYPE char30 DEFAULT '*',  " Datasource filter (* = all)
-            p_mode TYPE char1 DEFAULT 'D'.   " D=Delta, F=Full, I=Init, R=Recovery
+            p_mode TYPE char1 DEFAULT 'D'.   " D=Delta, F=Full, I=Init, R=Recovery, A=Auto
 
 SELECTION-SCREEN SKIP.
 
@@ -229,6 +230,18 @@ CLASS lcl_extractor IMPLEMENTATION.
             rs_result-success = abap_true.
             rs_result-message = 'Recovery completed'.
 
+          WHEN 'A'.  " Auto mode
+            DATA(lv_is_new) = COND abap_bool(
+              WHEN lo_subscriber->subscription_exists( ) = abap_false
+              THEN abap_true ELSE abap_false ).
+
+            rs_result-records = lo_subscriber->run_auto( ).
+            rs_result-success = abap_true.
+            rs_result-message = COND #(
+              WHEN lv_is_new = abap_true
+              THEN 'Auto: Init + Full completed'
+              ELSE 'Auto: Delta completed' ).
+
           WHEN OTHERS.
             rs_result-success = abap_false.
             rs_result-message = |Invalid mode: { iv_mode }|.
@@ -283,8 +296,8 @@ ENDCLASS.
 START-OF-SELECTION.
 
   " Validate mode parameter
-  IF NOT p_mode CA 'FDIR'.
-    MESSAGE e000(zbqtr) WITH 'Invalid mode. Use F, D, I, or R.'.
+  IF NOT p_mode CA 'FDIRA'.
+    MESSAGE e000(zbqtr) WITH 'Invalid mode. Use F, D, I, R, or A.'.
     RETURN.
   ENDIF.
 

@@ -12,7 +12,8 @@ CLASS zcl_bq_odp_subscriber DEFINITION
       c_mode_full     TYPE char1 VALUE 'F',
       c_mode_delta    TYPE char1 VALUE 'D',
       c_mode_init     TYPE char1 VALUE 'I',
-      c_mode_recovery TYPE char1 VALUE 'R'.
+      c_mode_recovery TYPE char1 VALUE 'R',
+      c_mode_auto     TYPE char1 VALUE 'A'.
 
     METHODS constructor
       IMPORTING
@@ -27,6 +28,10 @@ CLASS zcl_bq_odp_subscriber DEFINITION
       RAISING zcx_bq_replication_failed.
 
     METHODS run_delta
+      RETURNING VALUE(rv_records) TYPE i
+      RAISING zcx_bq_replication_failed.
+
+    METHODS run_auto
       RETURNING VALUE(rv_records) TYPE i
       RAISING zcx_bq_replication_failed.
 
@@ -167,6 +172,18 @@ CLASS zcl_bq_odp_subscriber IMPLEMENTATION.
         record_failure( lx_error->mv_error_text ).
         RAISE EXCEPTION lx_error.
     ENDTRY.
+  ENDMETHOD.
+
+
+  METHOD run_auto.
+    IF subscription_exists( ) = abap_false.
+      " First run: Initialize + Full
+      initialize_subscription( ).
+      rv_records = run_full( ).
+    ELSE.
+      " Subsequent runs: Delta
+      rv_records = run_delta( ).
+    ENDIF.
   ENDMETHOD.
 
 
