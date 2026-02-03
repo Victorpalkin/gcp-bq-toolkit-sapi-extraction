@@ -116,8 +116,8 @@ CLASS zcl_bq_replicator IMPLEMENTATION.
     TRY.
         CREATE OBJECT mo_bq_load TYPE ('/GOOG/CL_BQTR_DATA_LOAD')
           EXPORTING
-            iv_mass_tr_key = CONV char20( ms_config-mass_tr_key )
-            iv_struct_name = CONV char30( ms_config-struct_name ).
+            iv_mass_tr_key = ms_config-mass_tr_key
+            iv_struct_name = ms_config-struct_name.
       CATCH cx_sy_create_object_error INTO DATA(lx_create).
         RAISE EXCEPTION TYPE zcx_bq_replication_failed
           EXPORTING
@@ -326,7 +326,7 @@ CLASS zcl_bq_replicator IMPLEMENTATION.
         random = lv_random.
 
     rv_log_id = |{ lv_timestamp TIMESTAMP = ISO }{ lv_random }|.
-    REPLACE ALL OCCURRENCES OF REGEX '[^0-9]' IN rv_log_id WITH ''.
+    REPLACE ALL OCCURRENCES OF PCRE '[^0-9]' IN rv_log_id WITH ''.
     rv_log_id = rv_log_id(20).
   ENDMETHOD.
 

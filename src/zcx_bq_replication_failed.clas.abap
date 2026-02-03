@@ -75,7 +75,7 @@ CLASS zcx_bq_replication_failed DEFINITION
     DATA mv_error_text TYPE string READ-ONLY.
 
     "! Request ID for tracking
-    DATA mv_request_id TYPE char32 READ-ONLY.
+    DATA mv_request_id TYPE rodps_repl_pointer READ-ONLY.
 
     "! <p class="shorttext synchronized">Constructor</p>
     "!
@@ -90,7 +90,7 @@ CLASS zcx_bq_replication_failed DEFINITION
         iv_datasource TYPE char30 OPTIONAL
         iv_error_code TYPE i OPTIONAL
         iv_error_text TYPE string OPTIONAL
-        iv_request_id TYPE char32 OPTIONAL
+        iv_request_id TYPE rodps_repl_pointer OPTIONAL
         textid        LIKE if_t100_message=>t100key OPTIONAL
         previous      TYPE REF TO cx_root OPTIONAL.
 
