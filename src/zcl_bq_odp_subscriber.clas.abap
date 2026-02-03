@@ -77,7 +77,7 @@ CLASS zcl_bq_odp_subscriber DEFINITION
 
     METHODS close_extraction
       IMPORTING
-        iv_confirmed TYPE abap_bool
+        iv_failed TYPE abap_bool DEFAULT abap_false
       RAISING zcx_bq_replication_failed.
 
     METHODS update_subscription_tracking
@@ -126,7 +126,7 @@ CLASS zcl_bq_odp_subscriber IMPLEMENTATION.
   METHOD initialize_subscription.
     TRY.
         open_extraction( c_mode_init ).
-        close_extraction( abap_true ).
+        close_extraction( ).
 
         DATA: ls_sub TYPE zbqtr_subsc.
         ls_sub-datasource     = mv_datasource.
@@ -153,12 +153,12 @@ CLASS zcl_bq_odp_subscriber IMPLEMENTATION.
     TRY.
         open_extraction( c_mode_full ).
         rv_records = fetch_and_process( ).
-        close_extraction( abap_true ).
+        close_extraction( ).
         record_success( rv_records ).
 
       CATCH zcx_bq_replication_failed INTO DATA(lx_error).
         TRY.
-            close_extraction( abap_false ).
+            close_extraction( iv_failed = abap_true ).
           CATCH cx_root.
         ENDTRY.
         record_failure( lx_error->mv_error_text ).
@@ -173,12 +173,12 @@ CLASS zcl_bq_odp_subscriber IMPLEMENTATION.
     TRY.
         open_extraction( c_mode_delta ).
         rv_records = fetch_and_process( ).
-        close_extraction( abap_true ).
+        close_extraction( ).
         record_success( rv_records ).
 
       CATCH zcx_bq_replication_failed INTO DATA(lx_error).
         TRY.
-            close_extraction( abap_false ).
+            close_extraction( iv_failed = abap_true ).
           CATCH cx_root.
         ENDTRY.
         record_failure( lx_error->mv_error_text ).
@@ -299,18 +299,18 @@ CLASS zcl_bq_odp_subscriber IMPLEMENTATION.
 
     CALL FUNCTION 'RODPS_REPL_ODP_CLOSE'
       EXPORTING
-        i_pointer   = mv_pointer
-        i_confirmed = iv_confirmed
+        i_pointer           = mv_pointer
+        i_subscriber_failed = iv_failed
       TABLES
-        et_return   = lt_return
+        et_return           = lt_return
       EXCEPTIONS
-        OTHERS      = 1.
+        OTHERS              = 1.
 
     IF sy-subrc <> 0.
       RAISE EXCEPTION TYPE zcx_bq_replication_failed
         EXPORTING
           iv_datasource = mv_datasource
-          iv_error_text = |Failed to close ODP extraction (confirmed={ iv_confirmed })|
+          iv_error_text = |Failed to close ODP extraction (failed={ iv_failed })|
           iv_request_id = mv_pointer.
     ENDIF.
 
